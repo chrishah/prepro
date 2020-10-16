@@ -1,0 +1,39 @@
+__default__:
+   ntasks: 1
+   N: default
+   queue: mpi
+   mem: 4G
+   output: $(pwd)/log/sauron-%j.out
+   error: $(pwd)/log/sauron-%j.err
+   pe: smp
+structure:
+   N: prS
+all:
+   N: prA
+reformat_read_headers:
+   N: REF
+   hint: multithread
+trim_trimgalore:
+   N: TRI
+   mem: 10G
+   hint: nomultithread
+kmc:
+   N: KMC
+   mem: 2G
+   hint: multithread
+ec_blessfindk:
+   N: BFK
+   mem: 2G
+   hint: multithread
+ec_blesspe:
+   N: BPE
+   mem: 2G
+   hint: multithread
+ec_blessse:
+   N: BSE
+   mem: 2G
+   hint: multithread
+mergepairs_usearch:
+   N: MER
+   mem: 2G
+   hint: multithread

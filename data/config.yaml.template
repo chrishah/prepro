@@ -1,0 +1,15 @@
+samples: "data/data.csv"
+
+blessfindk:
+   startk: 21
+
+kmc:
+   max_mem_in_GB: 80
+
+threads:
+   trimmomatic: 24
+   kmc: 30
+   ec_blessfindk: 30
+   ec_blesspe: 30
+   ec_blessse: 30
+   mergepairs_usearch: 20

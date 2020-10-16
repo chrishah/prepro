@@ -1,0 +1,42 @@
+__default__:
+   n: 1
+   ntasks: 1
+   ntasks-per-core: 2
+   hint: multithread
+   qos: mem_0096
+   partition: mem_0096
+   mem: "2G"
+   time: "00:10:00"
+   output: $(pwd)/log/%x-%j.stdout.txt
+   error: $(pwd)/log/%x-%j.stderr.txt
+structure:
+   J: prS
+all:
+   J: prA
+reformat_read_headers:
+   J: REF
+   time: "24:00:00"
+trim_trimgalore:
+   J: TRI
+   mem: "10G"
+   time: "20:00:00"
+kmc:
+   J: KMC
+   mem: "20G"
+   time: "20:00:00"
+ec_blessfindk:
+   J: BFK
+   mem: "90G"
+   time: "72:00:00"
+ec_blesspe:
+   J: BPE
+   mem: "80G"
+   time: "24:00:00"
+ec_blessse:
+   J: BSE
+   mem: "80G"
+   time: "24:00:00"
+mergepairs_usearch:
+   J: MER
+   mem: "10G"
+   time: "24:00:00"

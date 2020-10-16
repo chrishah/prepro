@@ -1,0 +1,18 @@
+#regular run on single node
+snakemake --use-singularity -s Snakefile --singularity-args "-B $(pwd)"
+
+#distribute on cluster (VSC4)
+snakemake -s Snakefile \
+	--jobs 1000 --latency-wait 300 \
+	--use-singularity --singularity-args "-B $BINFL -B /gpfs/data/fs71312/hahnc" \
+	--cluster-config data/vsc4_config.yaml \
+	--cluster '$(pwd)/bin/immediate_submit.py {dependencies} slurm' \
+	--immediate-submit --notemp -pr
+
+#distribute on cluster (VSC4)
+snakemake -s Snakefile \
+	--jobs 1000 --latency-wait 300 \
+	--use-singularity --singularity-args "-B $BINFL -B /gpfs/data/fs71312/hahnc" \
+	--cluster-config data/sauron_config.yaml \
+	--cluster '$(pwd)/bin/immediate_submit.py {dependencies} sge' \
+	--immediate-submit --notemp -pr
