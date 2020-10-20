@@ -1,5 +1,6 @@
 !log/.gitignore
 log/
 results/
+!tmp/.gitignore
 tmp/
 .snakemake/
