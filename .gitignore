@@ -4,3 +4,4 @@ results/
 !tmp/.gitignore
 tmp/*
 .snakemake/
+.parallel/
