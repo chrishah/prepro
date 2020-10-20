@@ -56,9 +56,9 @@ rule all:
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 #		expand("results/{sample}/errorcorrection/{sample}.bestk", sample=unitdict.keys()),
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.corrected.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
-		expand("results/{unit.sample}/errorcorrection/{unit.sample}.{unit.lib}.corrected.fastq.gz", unit=units.itertuples()),
-		expand("results/{unit.sample}/readmerging/usearch/{unit.sample}.{unit.lib}.merged.fastq.gz", unit=units.itertuples()),
-		expand("results/{unit.sample}/readmerging/usearch/{unit.sample}.{unit.lib}_{pe}.nm.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
+		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.corrected.fastq.gz", unit=units.itertuples()),
+		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}.merged.fastq.gz", unit=units.itertuples()),
+		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}_{pe}.nm.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 
 #rule test:
 #	input:
@@ -70,6 +70,7 @@ rule all:
 #		"""
 #		touch {output.ok}
 #		"""
+#reslp/kmergenie:1.7051
 
 rule trim_trimgalore:
 	input:
@@ -133,8 +134,8 @@ rule reformat_read_headers:
 		pe = "{pe}"
 	threads: 2
 	output:
-		read = "results/{sample}/errorcorrection/{lib}.{pe}.fastq.gz",
-		ok = "results/{sample}/errorcorrection/headerformat.{lib}.{pe}.ok"
+		read = "results/{sample}/errorcorrection/{lib}/{lib}.{pe}.fastq.gz",
+		ok = "results/{sample}/errorcorrection/{lib}/headerformat.{lib}.{pe}.ok"
 	shell:
 		"""
 		#check if the read headers contain space - if yes reformat
@@ -191,8 +192,8 @@ rule ec_blessfindk:
 rule ec_blesspe:
 	input:
 		bestk = rules.ec_blessfindk.output,
-                forward = lambda wildcards: "results/{sample}/errorcorrection/{lib}.1.fastq.gz",
-                reverse = lambda wildcards: "results/{sample}/errorcorrection/{lib}.2.fastq.gz",
+                forward = lambda wildcards: "results/{sample}/errorcorrection/{lib}/{lib}.1.fastq.gz",
+                reverse = lambda wildcards: "results/{sample}/errorcorrection/{lib}/{lib}.2.fastq.gz",
 #		format1 = "results/{sample}/errorcorrection/headerformat.read1.ok",
 #		format2 = "results/{sample}/errorcorrection/headerformat.read2.ok",
 #		forward = "results/{sample}/errorcorrection/read1.fastq.gz",
@@ -213,15 +214,15 @@ rule ec_blesspe:
 		stdout = "results/{sample}/logs/blesspe.{sample}.{lib}.stdout.txt",
 		stderr = "results/{sample}/logs/blesspe.{sample}.{lib}.stderr.txt"
 	output:
-		cf = "results/{sample}/errorcorrection/{sample}.{lib}.1.corrected.fastq.gz",
-		cr = "results/{sample}/errorcorrection/{sample}.{lib}.2.corrected.fastq.gz"
+		cf = "results/{sample}/errorcorrection/{lib}/{sample}.{lib}.1.corrected.fastq.gz",
+		cr = "results/{sample}/errorcorrection/{lib}/{sample}.{lib}.2.corrected.fastq.gz"
 	shell:
 		"""
 		k=$(cat {input.bestk})
 		#echo -e "BEST k is: $k"
-		cd results/{params.sampleID}/errorcorrection
+		cd results/{params.sampleID}/errorcorrection/{params.lib}
 
-		bless -read1 {params.wd}/{input.forward} -read2 {params.wd}/{input.reverse} -kmerlength $k -smpthread {threads} -max_mem {params.max_mem_in_GB} -load {params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		bless -read1 {params.wd}/{input.forward} -read2 {params.wd}/{input.reverse} -kmerlength $k -smpthread {threads} -max_mem {params.max_mem_in_GB} -load ../{params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 
 		"""
 
@@ -244,20 +245,20 @@ rule ec_blessse:
 		stdout = "results/{sample}/logs/blessse.{sample}.{lib}.stdout.txt",
 		stderr = "results/{sample}/logs/blessse.{sample}.{lib}.stderr.txt"
 	output:
-		"results/{sample}/errorcorrection/{sample}.{lib}.corrected.fastq.gz",
+		"results/{sample}/errorcorrection/{lib}/{sample}.{lib}.corrected.fastq.gz",
 	shell:
 		"""
 		k=$(cat {input.bestk})
 		#echo -e "BEST k is: $k"
-		cd results/{params.sampleID}/errorcorrection
+		cd results/{params.sampleID}/errorcorrection/{params.lib}
 
 		cat {params.wd}/{input.bestk} \
 		<(zcat {params.wd}/{input.reads1} | sed 's/ 1.*/\/1/') \
-		<(zcat {params.wd}/{input.reads2} | sed 's/ 2.*/\/2/') | perl -ne 'chomp; if ($.==1){{$k=$_}}else{{$h=$_; $s=<>; $p=<>; $q=<>; if (length($s) > $k){{print "$h\\n$s$p$q"}}}}' > seqs.fastq
+		<(zcat {params.wd}/{input.reads2} | sed 's/ 2.*/\/2/') | perl -ne 'chomp; if ($.==1){{$k=$_}}else{{$h=$_; $s=<>; $p=<>; $q=<>; if (length($s) > $k){{print "$h\\n$s$p$q"}}}}' > {params.lib}.se.fastq
 
-		bless -read seqs.fastq -kmerlength $k -smpthread {threads} -max_mem {params.max_mem_in_GB} -load {params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		bless -read {params.lib}.se.fastq -kmerlength $k -smpthread {threads} -max_mem {params.max_mem_in_GB} -load ../{params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 
-		rm seqs.fastq
+		rm {params.lib}.se.fastq
 		"""
 
 rule mergepairs_usearch:
@@ -271,17 +272,19 @@ rule mergepairs_usearch:
 		batchsize = "4000000"
 	threads: config["threads"]["mergepairs_usearch"]
 	singularity:
-		"docker-archive:///home/fs71312/hahnc/src/USEARCH/usearch_v11.0.667.tar"
+		config["usearch_docker"]
 	log:
 		stdout = "results/{sample}/logs/usearch.{sample}.{lib}.stdout.txt",
 		stderr = "results/{sample}/logs/usearch.{sample}.{lib}.stderr.txt"
 	output:
-		merged = "results/{sample}/readmerging/usearch/{sample}.{lib}.merged.fastq.gz",
-		nm1 = "results/{sample}/readmerging/usearch/{sample}.{lib}_1.nm.fastq.gz",
-		nm2 = "results/{sample}/readmerging/usearch/{sample}.{lib}_2.nm.fastq.gz"
+		merged = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}.merged.fastq.gz",
+		nm1 = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}_1.nm.fastq.gz",
+		nm2 = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}_2.nm.fastq.gz"
 	shell:
 		"""
-		cd results/{params.sampleID}/readmerging/usearch
+		export TMPDIR={params.wd}/tmp
+
+		cd results/{params.sampleID}/readmerging/usearch/{params.lib}
 
 		usearch_mergepairs.sh {params.wd}/{input.cf} {params.wd}/{input.cr} {params.sampleID}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 		"""

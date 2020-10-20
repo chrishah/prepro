@@ -24,7 +24,7 @@ snakemake -s Snakefile \
 	--jobs 1000 --latency-wait 300 \
 	--use-singularity --singularity-args "-B /cl_tmp/hahnc" \
 	--cluster-config data/sauron_config.yaml \
-	--cluster '$(pwd)/bin/immediate_submit.py {dependencies} sge' \
+	--cluster "$(pwd)/bin/immediate_submit.py '{dependencies}' sge" \
 	--immediate-submit --notemp -pr
 ```
 

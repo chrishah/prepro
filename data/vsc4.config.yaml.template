@@ -1,15 +1,17 @@
 samples: "data/data.csv"
 
+usearch_docker: "docker-archive:///home/fs71312/hahnc/src/USEARCH/usearch_v11.0.667.tar"
+
 blessfindk:
    startk: 21
 
 kmc:
-   max_mem_in_GB: 80
+   max_mem_in_GB: 30
 
 threads:
-   trimmomatic: 24
-   kmc: 30
-   ec_blessfindk: 30
-   ec_blesspe: 30
-   ec_blessse: 30
-   mergepairs_usearch: 20
+   trimmomatic: 16
+   kmc: 16
+   ec_blessfindk: 16
+   ec_blesspe: 16
+   ec_blessse: 16
+   mergepairs_usearch: 16
