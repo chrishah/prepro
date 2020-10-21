@@ -40,15 +40,19 @@ do
 			cmd="$cmd -gzip"
 		fi
 		echo -e "$cmd"
+		#in clean mode write corrected reads to /dev/null, so not to use up space
+		if [ $6 ]
+		then
+			ln -s /dev/null $prefix-k$k.corrected.fastq.00000
+		fi
 		$cmd > bless-k$k.log.tmp
-		#when finished rename the log so that it's obvious if a process stopped before completed and only complete ones will be evaluated
+		#when finished, rename the log so that it's obvious if a process stopped before completed. Only complete ones will be evaluated subsequently
 		mv bless-k$k.log.tmp bless-k$k.log
-
+		#in clean mode remove empty read file
 		if [ $6 ]
 		then
 			rm $prefix-k$k.corrected.fastq
 		fi
-		count=$(ls -hlrt bless-k* |wc -l)
 	fi
 
 	if [ "$kmercountok" -eq 0 ]
