@@ -1,15 +1,14 @@
-samples: "data/data.csv.monos"
-
-usearch_docker: "docker-archive:///home/fs71312/hahnc/src/USEARCH/usearch_v11.0.667.tar"
+samples: "data/data.csv"
 
 blessfindk:
    startk: 21
 
 kmc:
    max_mem_in_GB: 40
-   k: 15
+   k: 11
    mincount: 2
-   maxcount: 1000000000
+   maxcount: 1000000000000
+   maxcounter: 255
 
 threads:
    trimmomatic: 24

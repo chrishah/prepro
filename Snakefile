@@ -144,12 +144,12 @@ rule kmc:
 		f_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
 		r_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
 	params:
-		wd = os.getcwd(),
-		max_mem_in_GB = config["kmc"]["max_mem_in_GB"],
 		sample = "{sample}",
 		k = config["kmc"]["k"],
+		max_mem_in_GB = config["kmc"]["max_mem_in_GB"],
 		mincount = config["kmc"]["mincount"],
 		maxcount = config["kmc"]["maxcount"],
+		maxcounter = config["kmc"]["maxcounter"],
 		nbin = 64,
 	threads: config["threads"]["kmc"]
 	singularity:
