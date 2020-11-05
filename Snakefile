@@ -320,7 +320,7 @@ rule mergepairs_usearch:
 		batchsize = "4000000"
 	threads: config["threads"]["mergepairs_usearch"]
 	singularity:
-		config["usearch_docker"]
+		"docker://chrishah/usearch-docker-onbuild:v012020"
 	log:
 		stdout = "results/{sample}/logs/usearch.{sample}.{lib}.stdout.txt",
 		stderr = "results/{sample}/logs/usearch.{sample}.{lib}.stderr.txt"
@@ -331,6 +331,7 @@ rule mergepairs_usearch:
 	shell:
 		"""
 		export TMPDIR={params.wd}/tmp
+		export PATH=$PATH:$(pwd)/bin
 
 		cd results/{params.sampleID}/readmerging/usearch/{params.lib}
 
