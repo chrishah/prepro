@@ -145,7 +145,7 @@ rule kmc:
 		r_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
 	params:
 		sample = "{sample}",
-		k = config["kmc"]["k"],
+		k = "{k}",
 		max_mem_in_GB = config["kmc"]["max_mem_in_GB"],
 		mincount = config["kmc"]["mincount"],
 		maxcount = config["kmc"]["maxcount"],
