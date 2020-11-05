@@ -42,6 +42,10 @@ if "sample" in job_properties["wildcards"]:
 if "lib" in job_properties["wildcards"]:
 	sample = sample+"-"+job_properties["wildcards"]["lib"]
 
+if "k" in job_properties["wildcards"]:
+	sample = sample+"-k"+job_properties["wildcards"]["k"]
+
+
 cmdline=[]
 # create list with command line arguments
 if subs == "slurm":
