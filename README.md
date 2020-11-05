@@ -1,6 +1,22 @@
 # prepro
 Snakemake pipeline for intitial processing (trimming, errorcorrection, merging) of Illumina data
 
+
+## Prerequisites (the short version)
+
+Before you start, make sure to check/setup the prerequisites - see [below](##Prerequisites) for details:
+ - clone the repo
+ - Setup Snakemake
+ - download usearch (if you want to do read merging)
+
+Prepare the following files:
+ - data file, containing the location of your reads (see [this](https://github.com/chrishah/prepro/blob/main/data/data.csv.template) example)
+ - config file, in which you specify parameters for the software (see template [here](https://github.com/chrishah/prepro/blob/main/data/config.yaml.template)) - be aware that you'll need to specify the name of the data file in the config file
+ - cluster config file (only if you want to run on a cluster) - here are examples for [slurm](https://github.com/chrishah/prepro/blob/main/data/cluster_config.vsc4.yaml.template) and [sge](https://github.com/chrishah/prepro/blob/main/data/cluster_config.sauron.yaml.template) clusters
+
+Now your're good to go.
+
+
 ## Typical usage
 
 ### Regular run on single node (assumes all data are in working directory)
@@ -8,7 +24,7 @@ Snakemake pipeline for intitial processing (trimming, errorcorrection, merging) 
 snakemake --use-singularity -s Snakefile --singularity-args "-B $(pwd)"
 ```
 
-### Distribute on cluster (VSC4)
+### Distribute on cluster (slurm - e.g. VSC4)
 ```bash
 snakemake -s Snakefile \
 	--jobs 1000 --latency-wait 300 \
@@ -18,7 +34,7 @@ snakemake -s Snakefile \
 	--immediate-submit --notemp -pr
 ```
 
-### Distribute on cluster (Sauron)
+### Distribute on cluster (sge - e.g. Sauron)
 ```bash
 snakemake -s Snakefile \
 	--jobs 1000 --latency-wait 300 \
@@ -28,7 +44,15 @@ snakemake -s Snakefile \
 	--immediate-submit --notemp -pr
 ```
 
-## Prerequisites
+##Prerequisites
+### Clone this repository.
+
+The repository contains most of the things you're going to need.
+```bash
+git clone https://github.com/chrishah/prepro.git
+cd prepro
+```
+
 ### Set up conda and install Snakemake
 
 To set us up with Snakemake we are going to use a package management system called `conda` (see [Documentation](https://docs.conda.io/en/latest/)).
@@ -89,4 +113,14 @@ After that, if you want to run Snakemake, you first need to enter the environmen
 ```bash
 (user@host)-$ conda activate snakemake
 (snakemake) (user@host)-$ snakemake -h
+```
+
+### Setup usearch
+
+ For paired end read merging the pipeline uses [usearch](https://www.drive5.com/usearch/). It's been tested with the free 32-bit version of `usearch`. However, the license of the 32-bit version does not allow re-distribution of the binaries, so you'll have to download it yourself from [here](https://www.drive5.com/usearch/download.html), rename the binary to `usearch` and place it in the `bin/` directory of the repository.
+```bash
+wget https://www.drive5.com/downloads/usearch11.0.667_i86linux32.gz
+gunzip $(find ./ -name "*gz")
+chmod a+x $(find ./ -name "*linux32")
+ln -s $(find ./ -name "*linux32") usearch
 ```
