@@ -52,13 +52,15 @@ def get_raw_r_fastqs(wildcards):
 rule all:
 	input:
 #		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
-#		expand("results/{sample}/kmc/all.status.ok", sample=unitdict.keys()),
+		expand("results/{unit.sample}/kmc/{unit.sample}.k"+str(config["kmc"]["k"])+".histogram.txt", unit=units.itertuples()),
+		expand("results/{unit.sample}/plots/{unit.sample}-k"+str(config["kmc"]["k"])+"-distribution-full.pdf" , unit=units.itertuples()),
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 #		expand("results/{sample}/errorcorrection/{sample}.bestk", sample=unitdict.keys()),
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.corrected.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.corrected.fastq.gz", unit=units.itertuples()),
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}.merged.fastq.gz", unit=units.itertuples()),
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}_{pe}.nm.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
+
 
 #rule test:
 #	input:
@@ -110,19 +112,65 @@ rule trim_trimgalore:
 		touch {params.wd}/{output.ok}
 
 		"""
-#rule kmc:
-#	input:
-#		f_trimmed = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
-#		r_trimmed = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
-#		f_orphans = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
-#		r_orphans = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
-#	output:
-#		ok = "results/{sample}/kmc/all.status.ok",
-#	threads: config["threads"]["kmc"]
-#	shell:
-#		"""
-#		touch {output.ok}
-#		"""
+rule stats:
+	input:
+		f_paired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		r_paired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		f_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		r_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+	singularity:
+		"docker://chrishah/r-docker:latest"
+	log:
+		stdout = "results/{sample}/logs/readstats.{sample}.stdout.txt",
+		stderr = "results/{sample}/logs/readstats.{sample}.stderr.txt"
+	output: 
+		stats = "results/{sample}/trimming/trim_galore/{sample}.readstats.txt"
+	threads: 2
+	shadow: "shallow"
+	shell:
+		"""
+		echo -e "$(date)\tGetting read stats" 1> {log.stdout}
+		bin/get_read_stats.sh {input.f_paired} {input.r_paired} {input.f_unpaired} {input.r_unpaired} 1> temp 2> {log.stderr}
+		mv temp {output.stats}
+		stats=$(cat {output.stats})
+		echo -e "Cummulative length: $(cat {output.stats} | cut -d " " -f 1)" 1>> {log.stdout} 2>> {log.stderr}
+		echo -e "Average read length: $(cat {output.stats} | cut -d " " -f 2)\\n" 1>> {log.stdout} 2>> {log.stderr}
+		echo -e "$(date)\tDone!" 1> {log.stdout}
+		"""
+rule kmc:
+	input:
+		f_paired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		r_paired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		f_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		r_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+	params:
+		wd = os.getcwd(),
+		max_mem_in_GB = config["kmc"]["max_mem_in_GB"],
+		sample = "{sample}",
+		k = config["kmc"]["k"],
+		mincov = 2,
+		nbin = 64,
+		maxcount = 10000
+	threads: config["threads"]["kmc"]
+	singularity:
+		"docker://chrishah/kmc3-docker:v3.0"
+	log:
+		stdout = "results/{sample}/logs/kmc.{sample}.k{k}.stdout.txt",
+		stderr = "results/{sample}/logs/kmc.{sample}.k{k}.stderr.txt"
+	output: 
+#		pre = "results/{sample}/kmc/{sample}.k{k}.kmc_pre",
+#		suf = "results/{sample}/kmc/{sample}.k{k}.kmc_suf",
+		hist = "results/{sample}/kmc/{sample}.k{k}.histogram.txt",
+	shadow: "shallow"
+	shell:
+		"""
+		echo -e "$(date)\tStarting kmc"
+		echo "{input}" | sed 's/ /\\n/g' > fastqs.txt
+		mkdir {params.sample}.db
+		kmc -k{params.k} -m$(( {params.max_mem_in_GB} - 2 )) -v -sm -ci{params.mincov} -n{params.nbin} -t$(( {threads} - 1 )) @fastqs.txt {params.sample} {params.sample}.db 1>> {log.stdout} 2>> {log.stderr}
+		#kmc_tools histogram {params.sample} -ci{params.mincov} -cx{params.maxcount} {output.hist}
+		kmc_tools histogram {params.sample} -ci{params.mincov} {output.hist} 1> /dev/null 2>> {log.stderr}
+		"""
 
 rule reformat_read_headers:
 	input:
@@ -180,8 +228,8 @@ rule ec_blessfindk:
 			seqs.fastq.gz \
 			{params.sample} \
 			{params.startk} \
-			{params.max_mem_in_GB} \
-			{threads} \
+			$(( {params.max_mem_in_GB} - 2 )) \
+			$(( {threads} - 1 )) \
 			clean \
 			1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 
@@ -222,7 +270,7 @@ rule ec_blesspe:
 		#echo -e "BEST k is: $k"
 		cd results/{params.sampleID}/errorcorrection/{params.lib}
 
-		bless -read1 {params.wd}/{input.forward} -read2 {params.wd}/{input.reverse} -kmerlength $k -smpthread {threads} -max_mem {params.max_mem_in_GB} -load ../{params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		bless -read1 {params.wd}/{input.forward} -read2 {params.wd}/{input.reverse} -kmerlength $k -smpthread $(( {threads} - 1 )) -max_mem $(( {params.max_mem_in_GB} - 2 )) -load ../{params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 
 		"""
 
@@ -256,7 +304,7 @@ rule ec_blessse:
 		<(zcat {params.wd}/{input.reads1} | sed 's/ 1.*/\/1/') \
 		<(zcat {params.wd}/{input.reads2} | sed 's/ 2.*/\/2/') | perl -ne 'chomp; if ($.==1){{$k=$_}}else{{$h=$_; $s=<>; $p=<>; $q=<>; if (length($s) > $k){{print "$h\\n$s$p$q"}}}}' > {params.lib}.se.fastq
 
-		bless -read {params.lib}.se.fastq -kmerlength $k -smpthread {threads} -max_mem {params.max_mem_in_GB} -load ../{params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		bless -read {params.lib}.se.fastq -kmerlength $k -smpthread $(( {threads} - 1 )) -max_mem $(( {params.max_mem_in_GB} - 2 )) -load ../{params.sampleID}-k$k -notrim -prefix {params.sampleID}.{params.lib} -gzip 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 
 		rm {params.lib}.se.fastq
 		"""
@@ -287,4 +335,29 @@ rule mergepairs_usearch:
 		cd results/{params.sampleID}/readmerging/usearch/{params.lib}
 
 		usearch_mergepairs.sh {params.wd}/{input.cf} {params.wd}/{input.cr} {params.sampleID}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		"""
+
+rule plot_k_hist:
+	input:
+		hist = rules.kmc.output.hist,
+		stats = rules.stats.output.stats
+	output:
+		full = "results/{sample}/plots/{sample}-k{k}-distribution-full.pdf",		
+	params:
+		sample = "{sample}",
+		k = config["kmc"]["k"],
+		script = "bin/plot.freq.in.R"
+	singularity:
+		"docker://chrishah/r-docker:latest"
+	log:
+		stdout = "results/{sample}/logs/plotkmerhist.{sample}.k{k}.stdout.txt",
+		stderr = "results/{sample}/logs/plotkmerhist.{sample}.k{k}.stderr.txt"
+	shadow: "shallow"
+	shell:
+		"""
+		stats=$(cat {input.stats})
+		echo -e "Cummulative length: $(echo -e "$stats" | cut -d " " -f 1)"
+		echo -e "Average read length: $(echo -e "$stats" | cut -d " " -f 2)"
+		Rscript {params.script} {input.hist} {params.sample} {params.k} $stats 1> {log.stdout} 2> {log.stderr}
+		cp {params.sample}-k{params.k}-distribution* results/{params.sample}/plots/
 		"""
