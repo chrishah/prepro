@@ -56,6 +56,12 @@ if subs == "slurm":
 	job_properties["cluster"]["ntasks"] = job_properties["threads"]
 	job_properties["cluster"]["ntasks-per-node"] = job_properties["threads"]
 
+	#determine memory requirements from config file/Snakefile
+	if "params" in job_properties:
+		if "max_mem_in_GB" in job_properties["params"]:
+			job_properties["cluster"]["mem"] = str(job_properties["params"]["max_mem_in_GB"])+"G"
+			print("Setting memory to %s" %job_properties["cluster"]["mem"], file=sys.stderr)
+
 	# create string for slurm submit options for rule
 	slurm_args = "--partition={partition} --time={time} --qos={qos} --ntasks={ntasks} --ntasks-per-node={ntasks-per-node} --hint={hint} --output={output} --error={error} -n {n} -J {J} --mem={mem}".format(**job_properties["cluster"])
 	cmdline.append(slurm_args)
@@ -80,6 +86,11 @@ elif subs == "sge":
 
 	#determine threads from the Snakemake profile, i.e. as determined in the Snakefile and the main config file respectively
 	job_properties["cluster"]["ntasks"] = job_properties["threads"]
+	#determine memory requirements from config file/Snakefile
+	if "params" in job_properties:
+		if "max_mem_in_GB" in job_properties["params"]:
+			job_properties["cluster"]["mem"] = str(job_properties["params"]["max_mem_in_GB"])+"G"
+			print("Setting memory to %s" %job_properties["cluster"]["mem"], file=sys.stderr)
 	
 	# TODO: add correct thread handling for SGE clusters
 	sge_args = "-cwd -V -q {queue} -l h_vmem={mem} -pe {pe} {ntasks} -o {output} -e {error} -N {N}".format(**job_properties["cluster"])	
