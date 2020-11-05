@@ -1,0 +1,20 @@
+samples: "data/data.csv.monos"
+
+usearch_docker: "docker-archive:///home/fs71312/hahnc/src/USEARCH/usearch_v11.0.667.tar"
+
+blessfindk:
+   startk: 21
+
+kmc:
+   max_mem_in_GB: 40
+   k: 15
+   mincount: 2
+   maxcount: 1000000000
+
+threads:
+   trimmomatic: 24
+   kmc: 42
+   ec_blessfindk: 42
+   ec_blesspe: 42
+   ec_blessse: 42
+   mergepairs_usearch: 20

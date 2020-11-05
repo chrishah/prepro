@@ -1,6 +1,6 @@
 __default__:
    ntasks: 1
-   N: default
+   N: DEF
    queue: mpi
    mem: 4G
    output: $(pwd)/log/sauron-%j.out
@@ -37,3 +37,11 @@ mergepairs_usearch:
    N: MER
    mem: 2G
    hint: multithread
+stats:
+   N: STA
+   mem: 2G
+   hint: multithread
+plot_k_hist:
+   N: PKH
+   mem: 2G
+   hint: nomultithread

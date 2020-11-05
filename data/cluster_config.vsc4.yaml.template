@@ -1,4 +1,5 @@
 __default__:
+   J: DEF
    n: 1
    ntasks: 1
    ntasks-per-core: 2
@@ -22,21 +23,25 @@ trim_trimgalore:
    time: "20:00:00"
 kmc:
    J: KMC
-   mem: "20G"
    time: "20:00:00"
 ec_blessfindk:
    J: BFK
-   mem: "90G"
    time: "72:00:00"
 ec_blesspe:
    J: BPE
-   mem: "80G"
    time: "24:00:00"
 ec_blessse:
    J: BSE
-   mem: "80G"
    time: "24:00:00"
 mergepairs_usearch:
    J: MER
-   mem: "10G"
+   mem: "20G"
    time: "24:00:00"
+stats:
+   J: STA
+   mem: "2G"
+   time: "10:00:00"
+plot_k_hist:
+   J: PKH
+   mem: "2G"
+   time: "00:01:00"
