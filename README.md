@@ -16,6 +16,14 @@ Prepare the following files:
 
 Now your're good to go.
 
+## **Rulegraph**
+
+<img src="https://github.com/chrishah/prepro/blob/main/rulegraph.png" eight="500">
+
+How this rulegraph was created:
+```bash
+snakemake --rulegraph | dot -Tpng > rulegraph.png
+```
 
 ## Typical usage
 
