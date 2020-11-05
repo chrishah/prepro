@@ -4,7 +4,7 @@ Snakemake pipeline for intitial processing (trimming, errorcorrection, merging) 
 
 ## Prerequisites (the short version)
 
-Before you start, make sure to check/setup the prerequisites - see [below](##Prerequisites) for details:
+Before you start, make sure to check/setup the prerequisites - see [below](#Prerequisites) for details:
  - clone the repo
  - Setup Snakemake
  - download usearch (if you want to do read merging)
@@ -44,7 +44,7 @@ snakemake -s Snakefile \
 	--immediate-submit --notemp -pr
 ```
 
-##Prerequisites
+## Prerequisites
 ### Clone this repository.
 
 The repository contains most of the things you're going to need.
