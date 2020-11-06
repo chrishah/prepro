@@ -11,7 +11,15 @@ __default__:
    output: $(pwd)/log/%x-%j.stdout.txt
    error: $(pwd)/log/%x-%j.stderr.txt
 all:
-   J: prA
+   J: preALL
+all_trim:
+   J: preALT
+all_kmers:
+   J: preALK
+all_correct:
+   J: preALC
+all_merge:
+   J: preALM
 fastqc_raw:
    J: FQR
    time: "10:00:00"

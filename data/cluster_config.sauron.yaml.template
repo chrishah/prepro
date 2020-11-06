@@ -7,7 +7,15 @@ __default__:
    error: $(pwd)/log/sauron-%j.err
    pe: smp
 all:
-   N: prA
+   N: preALL
+all_trim:
+   N: preALT
+all_kmers:
+   N: preALK
+all_correct:
+   N: preALC
+all_merge:
+   N: preALM
 fastqc_raw:
    N: FQR
    mem: 2G
