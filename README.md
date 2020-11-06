@@ -35,6 +35,7 @@ snakemake --use-singularity -s Snakefile --singularity-args "-B $(pwd)"
 ### Distribute on cluster (slurm - e.g. VSC4)
 ```bash
 snakemake -s Snakefile \
+	--configfile data/config.yaml \
 	--jobs 1000 --latency-wait 300 \
 	--use-singularity --singularity-args "-B $BINFL -B /gpfs/data/fs71312/hahnc" \
 	--cluster-config data/vsc4_config.yaml \
@@ -45,6 +46,7 @@ snakemake -s Snakefile \
 ### Distribute on cluster (sge - e.g. Sauron)
 ```bash
 snakemake -s Snakefile \
+	--configfile data/config.yaml \
 	--jobs 1000 --latency-wait 300 \
 	--use-singularity --singularity-args "-B /cl_tmp/hahnc" \
 	--cluster-config data/sauron_config.yaml \
