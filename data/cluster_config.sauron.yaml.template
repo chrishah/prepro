@@ -8,6 +8,10 @@ __default__:
    pe: smp
 all:
    N: prA
+fastqc_raw:
+   N: FQC
+   mem: 2G
+   hint: multithread
 reformat_read_headers:
    N: REF
    hint: multithread

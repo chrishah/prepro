@@ -51,15 +51,21 @@ def get_raw_r_fastqs(wildcards):
 #
 rule all:
 	input:
+		#fastqc
+		expand("results/{unit.sample}/raw_reads/fastqc/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
 #		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
+		#kmc
 		expand("results/{unit.sample}/kmc/{unit.sample}.k{k}.histogram.txt", unit=units.itertuples(), k=config["kmc"]["k"]),
+		#plots
 		expand("results/{unit.sample}/plots/{unit.sample}-k{k}-distribution-full.pdf" , unit=units.itertuples(), k=config["kmc"]["k"]),
 #		expand("results/{unit.sample}/kmc/{unit.sample}.k"+str(config["kmc"]["k"])+".histogram.txt", unit=units.itertuples()),
 #		expand("results/{unit.sample}/plots/{unit.sample}-k"+str(config["kmc"]["k"])+"-distribution-full.pdf" , unit=units.itertuples()),
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 #		expand("results/{sample}/errorcorrection/{sample}.bestk", sample=unitdict.keys()),
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.corrected.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
+		#ec se
 		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.corrected.fastq.gz", unit=units.itertuples()),
+		#read merging
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}.merged.fastq.gz", unit=units.itertuples()),
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}_{pe}.nm.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 
@@ -75,6 +81,28 @@ rule all:
 #		touch {output.ok}
 #		"""
 #reslp/kmergenie:1.7051
+
+rule fastqc_raw:
+	input:
+		forward = get_raw_f_fastqs,
+		reverse = get_raw_r_fastqs,
+	params:
+		wd = os.getcwd(),
+		lib = "{lib}",
+		sample = "{sample}",
+	singularity:
+		"docker://chrishah/trim_galore:0.6.0"
+	log:
+		stdout = "results/{sample}/logs/fastqc_raw.{sample}.{lib}.stdout.txt",
+		stderr = "results/{sample}/logs/fastqc_raw.{sample}.{lib}.stderr.txt"
+	output:
+		ok = "results/{sample}/raw_reads/fastqc/{lib}/{sample}.{lib}.status.ok",
+	shadow: "minimal"
+	threads: 2
+	shell:
+		"""
+		fastqc {input.forward} {input.reverse} 1> {log.stdout} 2> {log.stderr}
+		"""
 
 rule trim_trimgalore:
 	input:
@@ -102,6 +130,7 @@ rule trim_trimgalore:
 
 
 		trim_galore \
+		--fastqc \
 		--paired --length 69 -r1 70 -r2 70 --retain_unpaired --stringency 2 --quality 30 \
 		{input.forward} {input.reverse} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 
@@ -364,3 +393,7 @@ rule plot_k_hist:
 		Rscript {params.script} {input.hist} {params.sample} {params.k} $stats 1> {log.stdout} 2> {log.stderr}
 		cp {params.sample}-k{params.k}-distribution* results/{params.sample}/plots/
 		"""
+
+#rule merge_k_hists:
+#pdftk $(ls -1 $s-* | grep "\-full.pdf" | tr '\n' ' ') cat output $s.distribution.full.pdf
+#pdftk $(ls -1 $s-* | grep -v "\-full.pdf" | tr '\n' ' ') cat output $s.distribution.pdf

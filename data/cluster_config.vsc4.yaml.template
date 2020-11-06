@@ -12,6 +12,10 @@ __default__:
    error: $(pwd)/log/%x-%j.stderr.txt
 all:
    J: prA
+fastqc_raw:
+   J: FQC
+   time: "10:00:00"
+   mem: "4G"
 reformat_read_headers:
    J: REF
    time: "24:00:00"
