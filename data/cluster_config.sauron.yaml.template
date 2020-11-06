@@ -9,7 +9,11 @@ __default__:
 all:
    N: prA
 fastqc_raw:
-   N: FQC
+   N: FQR
+   mem: 2G
+   hint: multithread
+fastqc_trimmed:
+   N: FQT
    mem: 2G
    hint: multithread
 reformat_read_headers:

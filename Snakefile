@@ -53,6 +53,7 @@ rule all:
 	input:
 		#fastqc
 		expand("results/{unit.sample}/raw_reads/fastqc/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
+		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.fastqc.status.ok", unit=units.itertuples()),
 #		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
 		#kmc
 		expand("results/{unit.sample}/kmc/{unit.sample}.k{k}.histogram.txt", unit=units.itertuples(), k=config["kmc"]["k"]),
@@ -87,7 +88,6 @@ rule fastqc_raw:
 		forward = get_raw_f_fastqs,
 		reverse = get_raw_r_fastqs,
 	params:
-		wd = os.getcwd(),
 		lib = "{lib}",
 		sample = "{sample}",
 	singularity:
@@ -101,7 +101,7 @@ rule fastqc_raw:
 	threads: 2
 	shell:
 		"""
-		fastqc {input.forward} {input.reverse} 1> {log.stdout} 2> {log.stderr}
+		fastqc {input} 1> {log.stdout} 2> {log.stderr}
 		"""
 
 rule trim_trimgalore:
@@ -130,7 +130,6 @@ rule trim_trimgalore:
 
 
 		trim_galore \
-		--fastqc \
 		--paired --length 69 -r1 70 -r2 70 --retain_unpaired --stringency 2 --quality 30 \
 		{input.forward} {input.reverse} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 
@@ -142,6 +141,29 @@ rule trim_trimgalore:
 
 		touch {params.wd}/{output.ok}
 
+		"""
+
+rule fastqc_trimmed:
+	input:
+		f_paired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		r_paired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		f_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		r_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+	params:
+		lib = "{lib}",
+		sample = "{sample}",
+	singularity:
+		"docker://chrishah/trim_galore:0.6.0"
+	log:
+		stdout = "results/{sample}/logs/fastqc_trim_galore.{sample}.{lib}.stdout.txt",
+		stderr = "results/{sample}/logs/fastqc_trim_galore.{sample}.{lib}.stderr.txt"
+	output:
+		ok = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.fastqc.status.ok",
+	shadow: "minimal"
+	threads: 2
+	shell:
+		"""
+		fastqc {input} 1> {log.stdout} 2> {log.stderr}
 		"""
 rule stats:
 	input:

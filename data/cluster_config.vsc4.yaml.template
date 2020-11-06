@@ -13,7 +13,11 @@ __default__:
 all:
    J: prA
 fastqc_raw:
-   J: FQC
+   J: FQR
+   time: "10:00:00"
+   mem: "4G"
+fastqc_trimmed:
+   J: FQT
    time: "10:00:00"
    mem: "4G"
 reformat_read_headers:
