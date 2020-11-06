@@ -348,7 +348,7 @@ rule plot_k_hist:
 		full = "results/{sample}/plots/{sample}-k{k}-distribution-full.pdf",		
 	params:
 		sample = "{sample}",
-		k = config["kmc"]["k"],
+		k = "{k}",
 		script = "bin/plot.freq.in.R"
 	singularity:
 		"docker://chrishah/r-docker:latest"
