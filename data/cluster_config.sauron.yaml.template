@@ -6,8 +6,6 @@ __default__:
    output: $(pwd)/log/sauron-%j.out
    error: $(pwd)/log/sauron-%j.err
    pe: smp
-structure:
-   N: prS
 all:
    N: prA
 reformat_read_headers:

@@ -10,8 +10,6 @@ __default__:
    time: "00:10:00"
    output: $(pwd)/log/%x-%j.stdout.txt
    error: $(pwd)/log/%x-%j.stderr.txt
-structure:
-   J: prS
 all:
    J: prA
 reformat_read_headers:
