@@ -52,8 +52,10 @@ def get_raw_r_fastqs(wildcards):
 rule all:
 	input:
 #		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
-		expand("results/{unit.sample}/kmc/{unit.sample}.k"+str(config["kmc"]["k"])+".histogram.txt", unit=units.itertuples()),
-		expand("results/{unit.sample}/plots/{unit.sample}-k"+str(config["kmc"]["k"])+"-distribution-full.pdf" , unit=units.itertuples()),
+		expand("results/{unit.sample}/kmc/{unit.sample}.k{k}.histogram.txt", unit=units.itertuples(), k=config["kmc"]["k"]),
+		expand("results/{unit.sample}/plots/{unit.sample}-k{k}-distribution-full.pdf" , unit=units.itertuples(), k=config["kmc"]["k"]),
+#		expand("results/{unit.sample}/kmc/{unit.sample}.k"+str(config["kmc"]["k"])+".histogram.txt", unit=units.itertuples()),
+#		expand("results/{unit.sample}/plots/{unit.sample}-k"+str(config["kmc"]["k"])+"-distribution-full.pdf" , unit=units.itertuples()),
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 #		expand("results/{sample}/errorcorrection/{sample}.bestk", sample=unitdict.keys()),
 #		expand("results/{unit.sample}/errorcorrection/{unit.lib}.{pe}.corrected.fastq.gz", unit=units.itertuples(), pe=["1","2"]),

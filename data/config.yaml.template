@@ -1,13 +1,13 @@
-samples: "data/data.csv"
+samples: "data/data.csv.monos"
 
 blessfindk:
    startk: 21
 
 kmc:
    max_mem_in_GB: 40
-   k: 11
+   k: [31,41,51]
    mincount: 2
-   maxcount: 1000000000000
+   maxcount: 1000000000
    maxcounter: 255
 
 threads:
