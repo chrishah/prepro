@@ -70,6 +70,36 @@ rule all:
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}.merged.fastq.gz", unit=units.itertuples()),
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}_{pe}.nm.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 
+rule all_trim:
+	input:
+		#fastqc
+		expand("results/{unit.sample}/raw_reads/fastqc/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
+		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.fastqc.status.ok", unit=units.itertuples()),
+		#trimgalore
+		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
+
+rule all_kmers:
+	input:
+		#trimgalore
+		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
+		#kmc
+		expand("results/{unit.sample}/kmc/{unit.sample}.k{k}.histogram.txt", unit=units.itertuples(), k=config["kmc"]["k"]),
+		#plots
+		expand("results/{unit.sample}/plots/{unit.sample}-k{k}-distribution-full.pdf" , unit=units.itertuples(), k=config["kmc"]["k"]),
+		
+rule all_correct:
+	input:
+		#trimgalore
+		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
+		#ec se
+		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.corrected.fastq.gz", unit=units.itertuples()),
+		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.{pe}.corrected.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
+		
+rule all_merge:
+	input:
+		#read merging
+		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}.merged.fastq.gz", unit=units.itertuples()),
+		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}_{pe}.nm.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 
 #rule test:
 #	input:
@@ -102,6 +132,7 @@ rule fastqc_raw:
 	shell:
 		"""
 		fastqc {input} 1> {log.stdout} 2> {log.stderr}
+		touch {output}
 		"""
 
 rule trim_trimgalore:
@@ -164,6 +195,7 @@ rule fastqc_trimmed:
 	shell:
 		"""
 		fastqc {input} 1> {log.stdout} 2> {log.stderr}
+		touch {output}
 		"""
 rule stats:
 	input:
