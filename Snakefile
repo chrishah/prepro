@@ -118,6 +118,7 @@ rule fastqc_raw:
 		forward = get_raw_f_fastqs,
 		reverse = get_raw_r_fastqs,
 	params:
+		wd = os.getcwd(),
 		lib = "{lib}",
 		sample = "{sample}",
 	singularity:
@@ -132,7 +133,7 @@ rule fastqc_raw:
 	shell:
 		"""
 		fastqc -o ./ {input} 1> {log.stdout} 2> {log.stderr}
-		mv *.zip *.html results/{params.sample}/raw_reads/fastqc/{params.lib}/ 2>> {log.stderr}
+		mv *.zip *.html {params.wd}/results/{params.sample}/raw_reads/fastqc/{params.lib}/
 		touch {output}
 		"""
 
@@ -180,6 +181,7 @@ rule fastqc_trimmed:
 		f_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
 		r_unpaired = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
 	params:
+		wd = os.getcwd(),
 		lib = "{lib}",
 		sample = "{sample}",
 	singularity:
@@ -194,7 +196,7 @@ rule fastqc_trimmed:
 	shell:
 		"""
 		fastqc ./ {input} 1> {log.stdout} 2> {log.stderr}
-		mv *.zip *.html results/{params.sample}/trimming/trim_galore/{params.lib}/ 2>> {log.stderr}
+		mv *.zip *.html {params.wd}/results/{params.sample}/trimming/trim_galore/{params.lib}/
 		touch {output}
 		
 		"""
@@ -426,7 +428,7 @@ rule mergepairs_usearch:
 		export PATH=$PATH:$(pwd)/bin
 
 		usearch_mergepairs.sh {input.cf} {params.wd}/{input.cr} {params.sample}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
-		mv *.fastq.gz results/{params.sample}/readmerging/usearch/{params.lib}/
+		mv *.fastq.gz {params.wd}/results/{params.sample}/readmerging/usearch/{params.lib}/
 		"""
 
 rule plot_k_hist:
