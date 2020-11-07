@@ -131,7 +131,8 @@ rule fastqc_raw:
 	threads: 2
 	shell:
 		"""
-		fastqc {input} 1> {log.stdout} 2> {log.stderr}
+		fastqc -o ./ {input} 1> {log.stdout} 2> {log.stderr}
+		mv *.zip *.html results/{params.sample}/raw_reads/fastqc/{params.lib}/ 2>> {log.stderr}
 		touch {output}
 		"""
 
@@ -155,22 +156,20 @@ rule trim_trimgalore:
 		r_trimmed = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.2.fastq.gz",
 		f_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.1.fastq.gz",
 		r_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.2.fastq.gz"
+	shadow: "minimal"
 	shell:
 		"""
-		cd results/{params.sample}/trimming/trim_galore/{params.lib}
-
-
 		trim_galore \
 		--paired --length 69 -r1 70 -r2 70 --retain_unpaired --stringency 2 --quality 30 \
-		{input.forward} {input.reverse} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		{input.forward} {input.reverse} 1> {log.stdout} 2> {log.stderr}
 
-		mv $(find ./ -name "*_val_1.fq.gz") {params.wd}/{output.f_trimmed}
-		mv $(find ./ -name "*_val_2.fq.gz") {params.wd}/{output.r_trimmed}
+		mv $(find ./ -name "*_val_1.fq.gz") {output.f_trimmed}
+		mv $(find ./ -name "*_val_2.fq.gz") {output.r_trimmed}
 		
-		if [[ -f $(find ./ -name "*_unpaired_1.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_1.fq.gz") {params.wd}/{output.f_orphans}; else touch {params.wd}/{output.f_orphans}; fi
-		if [[ -f $(find ./ -name "*_unpaired_2.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_2.fq.gz") {params.wd}/{output.r_orphans}; else touch {params.wd}/{output.r_orphans}; fi
+		if [[ -f $(find ./ -name "*_unpaired_1.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_1.fq.gz") {output.f_orphans}; else touch {output.f_orphans}; fi
+		if [[ -f $(find ./ -name "*_unpaired_2.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_2.fq.gz") {output.r_orphans}; else touch {output.r_orphans}; fi
 
-		touch {params.wd}/{output.ok}
+		touch {output.ok}
 
 		"""
 
@@ -194,8 +193,10 @@ rule fastqc_trimmed:
 	threads: 2
 	shell:
 		"""
-		fastqc {input} 1> {log.stdout} 2> {log.stderr}
+		fastqc ./ {input} 1> {log.stdout} 2> {log.stderr}
+		mv *.zip *.html results/{params.sample}/trimming/trim_galore/{params.lib}/ 2>> {log.stderr}
 		touch {output}
+		
 		"""
 rule stats:
 	input:
@@ -220,7 +221,7 @@ rule stats:
 		stats=$(cat {output.stats})
 		echo -e "Cummulative length: $(cat {output.stats} | cut -d " " -f 1)" 1>> {log.stdout} 2>> {log.stderr}
 		echo -e "Average read length: $(cat {output.stats} | cut -d " " -f 2)\\n" 1>> {log.stdout} 2>> {log.stderr}
-		echo -e "$(date)\tDone!" 1> {log.stdout}
+		echo -e "$(date)\tDone!" 1>> {log.stdout}
 		"""
 rule kmc:
 	input:
@@ -327,14 +328,6 @@ rule ec_blesspe:
 		bestk = rules.ec_blessfindk.output,
                 forward = lambda wildcards: "results/{sample}/errorcorrection/{lib}/{lib}.1.fastq.gz",
                 reverse = lambda wildcards: "results/{sample}/errorcorrection/{lib}/{lib}.2.fastq.gz",
-#		format1 = "results/{sample}/errorcorrection/headerformat.read1.ok",
-#		format2 = "results/{sample}/errorcorrection/headerformat.read2.ok",
-#		forward = "results/{sample}/errorcorrection/read1.fastq.gz",
-#		reverse = "results/{sample}/errorcorrection/read2.fastq.gz"
-#		readformat = rules.reformat_read_headers.output.ok,
-#		reads = expand("results/{unit.sample}/errorcorrection/read{unit.unit}.fastq.gz", unit=units.itertuples()),
-#		forward = rules.trim_trimgalore.output.f_trimmed,
-#		reverse = rules.trim_trimgalore.output.r_trimmed
 	params:
 		wd = os.getcwd(),
 		sampleID = "{sample}",
@@ -393,14 +386,26 @@ rule ec_blessse:
 
 		rm {params.lib}.se.fastq
 		"""
+rule setup_usearch:
+	output:
+		"bin/usearch"
+	shadow: "minimal"
+	shell:
+		"""
+		wget https://www.drive5.com/downloads/usearch11.0.667_i86linux32.gz
+		gunzip -v $(find ./ -name "*gz")
+		chmod a+x $(find ./ -name "*linux32")
+		mv $(find ./ -name "*linux32") {output}
+		"""
 
 rule mergepairs_usearch:
 	input:
 		cf = rules.ec_blesspe.output.cf,
-		cr = rules.ec_blesspe.output.cr
+		cr = rules.ec_blesspe.output.cr,
+		usearch = rules.setup_usearch.output
 	params:
 		wd = os.getcwd(),
-		sampleID = "{sample}",
+		sample = "{sample}",
 		lib = "{lib}",
 		batchsize = "4000000"
 	threads: config["threads"]["mergepairs_usearch"]
@@ -412,15 +417,16 @@ rule mergepairs_usearch:
 	output:
 		merged = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}.merged.fastq.gz",
 		nm1 = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}_1.nm.fastq.gz",
-		nm2 = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}_2.nm.fastq.gz"
+		nm2 = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}_2.nm.fastq.gz",
+		log = "results/{sample}/readmerging/usearch/{lib}/merging.log"
+	shadow: "minimal"
 	shell:
 		"""
 		export TMPDIR={params.wd}/tmp
 		export PATH=$PATH:$(pwd)/bin
 
-		cd results/{params.sampleID}/readmerging/usearch/{params.lib}
-
-		usearch_mergepairs.sh {params.wd}/{input.cf} {params.wd}/{input.cr} {params.sampleID}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		usearch_mergepairs.sh {input.cf} {params.wd}/{input.cr} {params.sample}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		mv *.fastq.gz results/{params.sample}/readmerging/usearch/{params.lib}/
 		"""
 
 rule plot_k_hist:
