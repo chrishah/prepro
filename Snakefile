@@ -195,7 +195,7 @@ rule fastqc_trimmed:
 	threads: 2
 	shell:
 		"""
-		fastqc ./ {input} 1> {log.stdout} 2> {log.stderr}
+		fastqc -o ./ {input} 1> {log.stdout} 2> {log.stderr}
 		mv *.zip *.html {params.wd}/results/{params.sample}/trimming/trim_galore/{params.lib}/
 		touch {output}
 		
@@ -428,7 +428,7 @@ rule mergepairs_usearch:
 		export PATH=$PATH:$(pwd)/bin
 
 		usearch_mergepairs.sh {input.cf} {params.wd}/{input.cr} {params.sample}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
-		mv *.fastq.gz {params.wd}/results/{params.sample}/readmerging/usearch/{params.lib}/
+		cp *.fastq.gz {params.wd}/results/{params.sample}/readmerging/usearch/{params.lib}/
 		"""
 
 rule plot_k_hist:
