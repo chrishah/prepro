@@ -420,7 +420,6 @@ rule mergepairs_usearch:
 		merged = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}.merged.fastq.gz",
 		nm1 = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}_1.nm.fastq.gz",
 		nm2 = "results/{sample}/readmerging/usearch/{lib}/{sample}.{lib}_2.nm.fastq.gz",
-		log = "results/{sample}/readmerging/usearch/{lib}/merging.log"
 	shadow: "minimal"
 	shell:
 		"""
@@ -429,6 +428,9 @@ rule mergepairs_usearch:
 
 		usearch_mergepairs.sh {input.cf} {params.wd}/{input.cr} {params.sample}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
 		cp *.fastq.gz {params.wd}/results/{params.sample}/readmerging/usearch/{params.lib}/
+		
+		echo -e "###\n$(date)\tLogs from individual usearch runs:\n" >> {log.stdout}
+		cat merging.log >> {log.stdout}
 		"""
 
 rule plot_k_hist:
