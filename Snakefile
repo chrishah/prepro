@@ -426,10 +426,10 @@ rule mergepairs_usearch:
 		export TMPDIR={params.wd}/tmp
 		export PATH=$PATH:$(pwd)/bin
 
-		usearch_mergepairs.sh {input.cf} {params.wd}/{input.cr} {params.sample}.{params.lib} {threads} {params.batchsize} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
-		cp *.fastq.gz {params.wd}/results/{params.sample}/readmerging/usearch/{params.lib}/
+		usearch_mergepairs.sh {input.cf} {params.wd}/{input.cr} {params.sample}.{params.lib} {threads} {params.batchsize} 1> {log.stdout} 2> {log.stderr}
+		cp *.fastq.gz results/{params.sample}/readmerging/usearch/{params.lib}/
 		
-		echo -e "###\n$(date)\tLogs from individual usearch runs:\n" >> {log.stdout}
+		echo -e "###\\n$(date)\\tLogs from individual usearch runs:\\n" >> {log.stdout}
 		cat merging.log >> {log.stdout}
 		"""
 
