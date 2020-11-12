@@ -12,14 +12,14 @@ dic = {'sample': [], 'lib': []}
 
 unitdict = {}
 for lib in set(df.index.values.tolist()):
-    sample = df.loc[lib, ["sample"]].values[0]
+    sample = str(df.loc[lib, ["sample"]].values[0])
 #    print(sample,lib)
-    dic["sample"].append(sample)
-    dic["lib"].append(lib)
+    dic["sample"].append(str(sample))
+    dic["lib"].append(str(lib))
     if not sample in unitdict:
-        unitdict[sample] = [lib]
+        unitdict[sample] = [str(lib)]
     else:
-        unitdict[sample].append(lib)
+        unitdict[sample].append(str(lib))
 
 #print(unitdict)
 
