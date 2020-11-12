@@ -36,6 +36,9 @@ def get_raw_f_fastqs(wildcards):
 	return pd.read_csv(config["samples"], dtype=str, sep="\t").set_index(["lib"], drop=False).loc[(wildcards.lib), ["f_read"]].dropna()
 def get_raw_r_fastqs(wildcards):
 	return pd.read_csv(config["samples"], dtype=str, sep="\t").set_index(["lib"], drop=False).loc[(wildcards.lib), ["r_read"]].dropna()
+
+def get_format(wildcards):
+	return pd.read_csv(config["samples"], dtype=str, sep="\t").set_index(["lib"], drop=False).loc[(wildcards.lib), "f_read"]
 #
 #def get_forward_path(wildcards):
 ## this is to get the path to the forward reads from the CSV file
@@ -113,6 +116,127 @@ rule all_merge:
 #		"""
 #reslp/kmergenie:1.7051
 
+if lambda: get_format.endswith("bam"):
+	rule sort_bam:
+		input:
+			forward = get_raw_f_fastqs,
+		output:
+			ok = "results/{sample}/raw_reads/reads/{lib}/{sample}.{lib}.sorting.ok",
+		log:
+			stdout = "results/{sample}/logs/sort_bam.{lib}.stdout.txt",
+			stderr = "results/{sample}/logs/sort_bam.{lib}.stderr.txt"
+		params:
+			wd = os.getcwd(),
+			sample = "{sample}",
+			lib = "{lib}"
+		threads: 3
+		singularity: "docker://reslp/samtools:1.11"
+		shadow: "minimal"
+		shell:
+			"""
+			samtools sort -@ $(( {threads} - 1 )) -m 2G -n {input.forward} -o {params.sample}.{params.lib}.sorted.bam 1> {log.stdout} 2> {log.stderr}
+			mv *.bam {params.wd}/results/{params.sample}/raw_reads/reads/{params.lib}/
+			touch {output.ok}
+			"""
+	rule bam2fastq:
+		input:
+			rules.sort_bam.output
+		output:
+			forward = "results/{sample}/raw_reads/reads/{lib}/{sample}.{lib}.raw.1.fastq.gz",
+			reverse = "results/{sample}/raw_reads/reads/{lib}/{sample}.{lib}.raw.2.fastq.gz"
+		log:
+			stdout = "results/{sample}/logs/bam2fastq.{lib}.stdout.txt",
+			stderr = "results/{sample}/logs/bam2fastq.{lib}.stderr.txt"
+		params:
+			wd = os.getcwd(),
+			sample = "{sample}",
+			lib = "{lib}"
+		threads: 2
+		singularity: "docker://reslp/bedtools:2.29.2"
+		shadow: "minimal"
+		shell:
+			"""
+			bedtools bamtofastq -i {params.wd}/results/{params.sample}/raw_reads/reads/{params.lib}/{params.sample}.{params.lib}.sorted.bam -fq results/{params.sample}/raw_reads/reads/{params.lib}/{params.sample}.{params.lib}.raw.1.fastq -fq2 results/{params.sample}/raw_reads/reads/{params.lib}/{params.sample}.{params.lib}.raw.2.fastq 1> {log.stdout} 2> {log.stderr}
+			gzip -v results/{params.sample}/raw_reads/reads/{params.lib}/*.fastq 1>> {log.stdout} 2>> {log.stderr}
+			rm {params.wd}/results/{params.sample}/raw_reads/reads/{params.lib}/*.bam
+			"""		
+	
+	rule trim_trimgalore:
+		input:
+			forward = rules.bam2fastq.output.forward,
+			reverse = rules.bam2fastq.output.reverse
+		params:
+			wd = os.getcwd(),
+			lib = "{lib}",
+			sample = "{sample}",
+#			adapters = "--illumina"
+		singularity:
+			"docker://chrishah/trim_galore:0.6.0"
+		log:
+			stdout = "results/{sample}/logs/trimgalore.{lib}.stdout.txt",
+			stderr = "results/{sample}/logs/trimgalore.{lib}.stderr.txt"
+		output:
+			ok = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.status.ok",
+			f_trimmed = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.1.fastq.gz",
+			r_trimmed = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.2.fastq.gz",
+			f_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.1.fastq.gz",
+			r_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.2.fastq.gz"
+		shadow: "minimal"
+		threads: 4
+		shell:
+			"""
+			trim_galore \
+			--paired --length 69 -r1 70 -r2 70 --retain_unpaired --stringency 2 --quality 30 \
+			{input.forward} {input.reverse} 1> {log.stdout} 2> {log.stderr}
+
+			mv $(find ./ -name "*_val_1.fq.gz") {output.f_trimmed}
+			mv $(find ./ -name "*_val_2.fq.gz") {output.r_trimmed}
+		
+			if [[ -f $(find ./ -name "*_unpaired_1.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_1.fq.gz") {output.f_orphans}; else touch {output.f_orphans}; fi
+			if [[ -f $(find ./ -name "*_unpaired_2.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_2.fq.gz") {output.r_orphans}; else touch {output.r_orphans}; fi
+
+			touch {output.ok}
+
+			"""
+else:
+	rule trim_trimgalore:
+		input:
+			forward = get_raw_f_fastqs,
+			reverse = get_raw_r_fastqs,
+		params:
+			wd = os.getcwd(),
+			lib = "{lib}",
+			sample = "{sample}",
+#			adapters = "--illumina"
+		singularity:
+			"docker://chrishah/trim_galore:0.6.0"
+		log:
+			stdout = "results/{sample}/logs/trimgalore.{lib}.stdout.txt",
+			stderr = "results/{sample}/logs/trimgalore.{lib}.stderr.txt"
+		output:
+			ok = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.status.ok",
+			f_trimmed = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.1.fastq.gz",
+			r_trimmed = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.2.fastq.gz",
+			f_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.1.fastq.gz",
+			r_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.2.fastq.gz"
+		shadow: "minimal"
+		threads: 4
+		shell:
+			"""
+			trim_galore \
+			--paired --length 69 -r1 70 -r2 70 --retain_unpaired --stringency 2 --quality 30 \
+			{input.forward} {input.reverse} 1> {log.stdout} 2> {log.stderr}
+
+			mv $(find ./ -name "*_val_1.fq.gz") {output.f_trimmed}
+			mv $(find ./ -name "*_val_2.fq.gz") {output.r_trimmed}
+		
+			if [[ -f $(find ./ -name "*_unpaired_1.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_1.fq.gz") {output.f_orphans}; else touch {output.f_orphans}; fi
+			if [[ -f $(find ./ -name "*_unpaired_2.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_2.fq.gz") {output.r_orphans}; else touch {output.r_orphans}; fi
+
+			touch {output.ok}
+
+			"""
+	
 rule fastqc_raw:
 	input:
 		forward = get_raw_f_fastqs,
@@ -135,43 +259,6 @@ rule fastqc_raw:
 		fastqc -o ./ {input} 1> {log.stdout} 2> {log.stderr}
 		mv *.zip *.html {params.wd}/results/{params.sample}/raw_reads/fastqc/{params.lib}/
 		touch {output}
-		"""
-
-rule trim_trimgalore:
-	input:
-		forward = get_raw_f_fastqs,
-		reverse = get_raw_r_fastqs,
-	params:
-		wd = os.getcwd(),
-		lib = "{lib}",
-		sample = "{sample}",
-#		adapters = "--illumina"
-	singularity:
-		"docker://chrishah/trim_galore:0.6.0"
-	log:
-		stdout = "results/{sample}/logs/trimgalore.{lib}.stdout.txt",
-		stderr = "results/{sample}/logs/trimgalore.{lib}.stderr.txt"
-	output:
-		ok = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.status.ok",
-		f_trimmed = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.1.fastq.gz",
-		r_trimmed = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.2.fastq.gz",
-		f_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.1.fastq.gz",
-		r_orphans = "results/{sample}/trimming/trim_galore/{lib}/{sample}.{lib}.unpaired.2.fastq.gz"
-	shadow: "minimal"
-	shell:
-		"""
-		trim_galore \
-		--paired --length 69 -r1 70 -r2 70 --retain_unpaired --stringency 2 --quality 30 \
-		{input.forward} {input.reverse} 1> {log.stdout} 2> {log.stderr}
-
-		mv $(find ./ -name "*_val_1.fq.gz") {output.f_trimmed}
-		mv $(find ./ -name "*_val_2.fq.gz") {output.r_trimmed}
-		
-		if [[ -f $(find ./ -name "*_unpaired_1.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_1.fq.gz") {output.f_orphans}; else touch {output.f_orphans}; fi
-		if [[ -f $(find ./ -name "*_unpaired_2.fq.gz") ]]; then mv $(find ./ -name "*_unpaired_2.fq.gz") {output.r_orphans}; else touch {output.r_orphans}; fi
-
-		touch {output.ok}
-
 		"""
 
 rule fastqc_trimmed:
@@ -458,6 +545,32 @@ rule plot_k_hist:
 		cp {params.sample}-k{params.k}-distribution* results/{params.sample}/plots/
 		"""
 
+#rule filter_by_kmer_coverage:
+#	input:
+#	params:
+#		sample = "{sample}",
+#		k = "{k}",
+#		max_mem_in_GB = config["kmc"]["max_mem_in_GB"],
+#		mincount = config["kmc"]["mincount"],
+#		maxcount = config["kmc"]["maxcount"],
+#		maxcounter = config["kmc"]["maxcounter"],
+#		nbin = 64,
+#	threads: config["threads"]["kmc"]
+#	singularity:
+#		"docker://chrishah/kmc3-docker:v3.0"
+#	log:
+#		stdout = "results/{sample}/logs/kmc.{sample}.k{k}.stdout.txt",
+#		stderr = "results/{sample}/logs/kmc.{sample}.k{k}.stderr.txt"
+#	output: 
+##		pre = "results/{sample}/kmc/{sample}.k{k}.kmc_pre",
+##		suf = "results/{sample}/kmc/{sample}.k{k}.kmc_suf",
+#		hist = "results/{sample}/kmc/{sample}.k{k}.histogram.txt",
+#	shadow: "shallow"
+#	shell:
+#		"""
+#		echo "{input}" | sed 's/ /\\n/g' > fastqs.txt
+#		kmc_tools filter $db_prefix -ci$min_kmer_cov -cx$max_kmer_cov @fastqs.txt -ci$min_perc_kmers -cx$max_perc_kmers {output.fastq}
+#		"""
 #rule merge_k_hists:
 #pdftk $(ls -1 $s-* | grep "\-full.pdf" | tr '\n' ' ') cat output $s.distribution.full.pdf
 #pdftk $(ls -1 $s-* | grep -v "\-full.pdf" | tr '\n' ' ') cat output $s.distribution.pdf
