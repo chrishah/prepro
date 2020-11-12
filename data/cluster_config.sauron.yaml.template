@@ -16,6 +16,11 @@ all_correct:
    N: preALC
 all_merge:
    N: preALM
+sort_bam:
+   N: SOB
+   mem: 4G
+bam2fastq:
+   J: B2F
 fastqc_raw:
    N: FQR
    mem: 2G

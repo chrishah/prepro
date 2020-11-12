@@ -20,14 +20,21 @@ all_correct:
    J: preALC
 all_merge:
    J: preALM
+sort_bam:
+   J: SOB
+   mem: "6G"
+   time: "24:00:00"
+bam2fastq:
+   J: B2F
+   time: "24:00:00"
 fastqc_raw:
    J: FQR
    time: "10:00:00"
-   mem: "4G"
+   mem: "6G"
 fastqc_trimmed:
    J: FQT
    time: "10:00:00"
-   mem: "4G"
+   mem: "6G"
 reformat_read_headers:
    J: REF
    time: "24:00:00"
