@@ -81,6 +81,11 @@ rule all_trim:
 		#trimgalore
 		expand("results/{unit.sample}/trimming/trim_galore/{unit.lib}/{unit.sample}.{unit.lib}.status.ok", unit=units.itertuples()),
 
+rule all_trim_clean:
+	input:
+		#trimming
+		expand("results/{unit.sample}/trimming/trim_galore/{unit.sample}-full/{unit.sample}.cat.status.ok", unit=units.itertuples())
+
 rule all_kmers:
 	input:
 		#trimgalore
@@ -98,12 +103,21 @@ rule all_correct:
 		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.corrected.fastq.gz", unit=units.itertuples()),
 		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.{pe}.corrected.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 		
+rule all_correct_clean:
+	input:
+		#corrected
+		expand("results/{unit.sample}/errorcorrection/{unit.sample}-full/{unit.sample}.cat.status.ok", unit=units.itertuples())
+
 rule all_merge:
 	input:
 		#read merging
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}.merged.fastq.gz", unit=units.itertuples()),
 		expand("results/{unit.sample}/readmerging/usearch/{unit.lib}/{unit.sample}.{unit.lib}_{pe}.nm.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 
+rule all_merge_clean:
+	input:
+		#merging
+		expand("results/{unit.sample}/readmerging/usearch/{unit.sample}-full/{unit.sample}.cat.status.ok", unit=units.itertuples())
 #rule test:
 #	input:
 #		forward = get_raw_f_fastqs,
@@ -545,6 +559,102 @@ rule plot_k_hist:
 		cp {params.sample}-k{params.k}-distribution* results/{params.sample}/plots/
 		"""
 
+rule clean_trimmed_libs:
+	input:
+		forward = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		reverse = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		forward_orphans = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.1.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		reverse_orphans = lambda wildcards: expand("results/{{sample}}/trimming/trim_galore/{lib}/{{sample}}.{lib}.unpaired.2.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+	singularity:
+		"docker://chrishah/trim_galore:0.6.0"
+	output:
+		ok = "results/{sample}/trimming/trim_galore/{sample}-full/{sample}.cat.status.ok",
+		f_trimmed = "results/{sample}/trimming/trim_galore/{sample}-full/{sample}.trimgalore.1.fastq.gz",
+		r_trimmed = "results/{sample}/trimming/trim_galore/{sample}-full/{sample}.trimgalore.2.fastq.gz",
+		orphans = "results/{sample}/trimming/trim_galore/{sample}-full/{sample}.trimgalore.se.fastq.gz",
+	shadow: "minimal"
+	threads: 2
+	shell:
+		"""
+		if [ $(echo {input.forward} | wc -w) -gt 1 ]
+		then
+			cat {input.forward} > {output.f_trimmed}
+			cat {input.reverse} > {output.r_trimmed}
+		else
+			ln -s ../../../../{input.forward} {output.f_trimmed}
+			ln -s ../../../../{input.reverse} {output.r_trimmed}
+		fi
+		cat {input.forward_orphans} {input.reverse_orphans} > {output.orphans}
+		touch {output.ok}
+		"""
+
+rule clean_corrected_libs:
+	input:
+		forward = lambda wildcards: expand("results/{{sample}}/errorcorrection/{lib}/{{sample}}.{lib}.1.corrected.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		reverse = lambda wildcards: expand("results/{{sample}}/errorcorrection/{lib}/{{sample}}.{lib}.2.corrected.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		orphans = lambda wildcards: expand("results/{{sample}}/errorcorrection/{lib}/{{sample}}.{lib}.corrected.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+	singularity:
+		"docker://chrishah/trim_galore:0.6.0"
+	output:
+		ok = "results/{sample}/errorcorrection/{sample}-full/{sample}.cat.status.ok",
+		f = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.1.fastq.gz",
+		r = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.2.fastq.gz",
+		o = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz"
+	shadow: "minimal"
+	threads: 2
+	shell:
+		"""
+		if [ $(echo {input.forward} | wc -w) -gt 1 ]
+		then
+			cat {input.forward} > {output.f}
+			cat {input.reverse} > {output.r}
+		else
+			ln -s ../../../../{input.forward} {output.f}
+			ln -s ../../../../{input.reverse} {output.r}
+		fi
+		cat {input.orphans} > {output.o}
+		touch {output.ok}
+		"""
+
+rule clean_merged_libs:
+	input:
+		merged = lambda wildcards: expand("results/{{sample}}/readmerging/usearch/{lib}/{{sample}}.{lib}.merged.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		forward = lambda wildcards: expand("results/{{sample}}/readmerging/usearch/{lib}/{{sample}}.{lib}_1.nm.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+		reverse = lambda wildcards: expand("results/{{sample}}/readmerging/usearch/{lib}/{{sample}}.{lib}_2.nm.fastq.gz", sample=wildcards.sample, lib=unitdict[wildcards.sample]),
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+	singularity:
+		"docker://chrishah/trim_galore:0.6.0"
+	output:
+		ok = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.cat.status.ok",
+		m = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+	shadow: "minimal"
+	threads: 2
+	shell:
+		"""
+		if [ $(echo {input.merged} | wc -w) -gt 1 ]
+		then
+			cat {input.merged} > {output.m}
+			cat {input.forward} > {output.f}
+			cat {input.reverse} > {output.r}
+		else
+			ln -s ../../../../../{input.merged} {output.m}
+			ln -s ../../../../../{input.forward} {output.f}
+			ln -s ../../../../../{input.reverse} {output.r}
+		fi
+		touch {output.ok}
+		"""
+
+#rule merge_libs_merged:
 #rule filter_by_kmer_coverage:
 #	input:
 #	params:
