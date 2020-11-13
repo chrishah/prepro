@@ -10,12 +10,18 @@ all:
    N: preALL
 all_trim:
    N: preALT
+all_trim_clean:
+   N: preATC
 all_kmers:
    N: preALK
 all_correct:
    N: preALC
+all_correct_clean:
+   N: preACC
 all_merge:
    N: preALM
+all_merge_clean:
+   N: preAMC
 sort_bam:
    N: SOB
    mem: 4G
@@ -34,8 +40,10 @@ reformat_read_headers:
    hint: multithread
 trim_trimgalore:
    N: TRI
-   mem: 10G
+   mem: 2G
    hint: nomultithread
+clean_trimmed_libs:
+   N: CTL
 kmc:
    N: KMC
    mem: 2G
@@ -52,10 +60,13 @@ ec_blessse:
    N: BSE
    mem: 2G
    hint: multithread
+clean_corrected_libs:
+   N: CCL
 mergepairs_usearch:
    N: MER
    mem: 2G
-   hint: multithread
+clean_merged_libs:
+   N: CML
 stats:
    N: STA
    mem: 2G
