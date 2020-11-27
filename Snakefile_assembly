@@ -1,0 +1,688 @@
+#configfile: "data/config.yaml"
+
+import pandas as pd
+import os
+
+k = [51]
+ec_concurrency = 100
+ec_unit_list = range(1,ec_concurrency+1)
+flappie_concurrency = 30
+flappie_unit_list = range(1,flappie_concurrency+1)
+unitig_similarity = [0.98]
+#localrules: structure, all
+
+df = pd.read_csv(config["sample"], sep="\t").set_index("sample", drop=False)
+
+#only keep rows in dataframe that do not have na in column fast5_dir
+df_fast5 = df[pd.read_csv(config["sample"], sep="\t").set_index("sample", drop=False)['fast5_dir'].notna()]
+#only keep rows in dataframe that do not have na in column ont
+df_ont = df[pd.read_csv(config["sample"], sep="\t").set_index("sample", drop=False)['ont'].notna()]
+
+#df = pd.read_csv(config["samples"], sep="\t").set_index("lib", drop=False)
+def get_ont(wildcards):
+	return df_ont.loc[(wildcards.sample), ["ont"]].dropna()
+def get_fast5_dir(wildcards):
+	return df_fast5.loc[(wildcards.sample), ["fast5_dir"]]
+#	return pd.read_csv(config["sample"], dtype=str, sep="\t").set_index(["sample"], drop=False).loc[(wildcards.sample), ["fast5_dir"]].dropna()
+
+
+rule all:
+	input:
+		expand("results/{sample}/assembly/kmergenie/{sample}.bestk", sample=df["sample"]),
+		expand("results/{sample}/assembly/abyss/bestk/abyss.ok", sample=df["sample"]),
+		expand("results/{sample}/assembly/spades/spades.ok", sample=df["sample"]),
+		expand("results/{sample}/assembly/spades/bestk/spades.ok", sample=df["sample"]),
+		expand("results/{sample}/assembly/platanus/platanus.ok", sample=df["sample"]),
+		expand("results/{sample}/assembly/minia/bestk/minia.done", sample=df["sample"]),
+		expand("results/{sample}/assembly/abyss/bestk/{sample}-unitigs.nr-{similarity}.fa", sample=df_ont["sample"], similarity=unitig_similarity),
+		expand("results/{sample}/errorcorrection/ectools/partition.ok", sample=df_ont["sample"]),
+		expand("results/{sample}/errorcorrection/ectools/ectools.{unit}.ok", sample=df_ont["sample"], unit=ec_unit_list),
+		expand("results/{sample}/assembly/abyss/ont-rescaffold/abyss.ok", sample=df_ont["sample"]),
+		expand("results/{sample}/raw_reads/ont/{sample}.flappie.{unit}.fastq.gz", sample=df_fast5["sample"], unit=flappie_unit_list),
+		expand("results/{sample}/assembly/abyss/flappie-rescaffold/abyss.ok", sample=df_fast5["sample"], unit=flappie_unit_list),
+		expand("results/{sample}/assembly/spades/flappie-long/spades.ok", sample=df_fast5["sample"], unit=flappie_unit_list),
+
+rule kmergenie:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz" 
+	output:
+		html = "results/{sample}/assembly/kmergenie/{sample}_report.html",
+		bestk = "results/{sample}/assembly/kmergenie/{sample}.bestk",
+		bestkcutoff = "results/{sample}/assembly/kmergenie/{sample}.bestk-cutoff",
+	log:
+		stdout = "results/{sample}/logs/kmergenie.stdout.txt",
+		stderr = "results/{sample}/logs/kmergenie.stderr.txt"
+	params:
+		sample = "{sample}",
+		outdir = "results/{sample}/assembly/kmergenie",
+		mink = 21,
+		stepk = 10,
+		maxk = 121
+	singularity: "docker://reslp/kmergenie:1.7051"
+	threads: 10
+	resources:
+		mem_gb = 20
+	shadow: "minimal"
+	shell:
+		"""
+		echo {input} | tr ' ' '\\n' > fofn.txt
+		#capturing the returncode both in case of success or (||) when dying witha n error stops snakemake to exit the shell upon an error. 
+		#kmergenie exits with and error if no best kmer could be found - in this case we want the pipeline to go on so I check if this was the cause of the error in the next if
+		# and if yes we create the expected output files
+		kmergenie fofn.txt -l {params.mink} -k {params.maxk} -s {params.stepk} -o {params.sample} -t $(( {threads} - 1 )) --diploid 1> {log.stdout} 2> {log.stderr} && returncode=$? || returncode=$? 
+
+		if [ $returncode -gt 0 ]
+		then
+			#report was not written - could be because no best k was found or because of some other error
+			#check if best k could be not be found
+			if [ "$(cat {log.stderr})" = "No best k found" ]
+			then
+				echo "\\nBest k could not be found - moving on" 1>> {log.stdout}
+				echo "0" > {output.bestk}
+				echo "0" > {output.bestkcutoff}
+			else
+				exit 1
+			fi
+		else	
+			grep "^best k" {log.stdout} | cut -d " " -f 3 > {output.bestk}
+			grep "cut-off for best k" {log.stdout} | cut -d " " -f 7 > {output.bestkcutoff}
+		fi
+		
+		if [ ! -d {params.outdir} ]
+		then
+			mkdir -p {params.outdir}
+		fi
+		mv {params.sample}* {params.outdir}/
+		"""
+
+rule minia:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz",
+		bestk = rules.kmergenie.output.bestk,
+		bestkcutoff = rules.kmergenie.output.bestkcutoff
+	output:
+		unitigs = "results/{sample}/assembly/minia/bestk/{sample}_bestk.unitigs.fa",
+		contigs = "results/{sample}/assembly/minia/bestk/{sample}_bestk.contigs.fa",
+		ok = "results/{sample}/assembly/minia/bestk/minia.done"
+	log:
+		stdout = "results/{sample}/logs/minia-bestk.stdout.txt",
+		stderr = "results/{sample}/logs/minia-bestk.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		defaultk = k
+	singularity:
+		"docker://chrishah/minia:3.2.4"
+#	shadow: "minimal"
+	threads: 30
+	resources:
+		mem_gb=30
+	shell:
+		"""
+		bestk=$(cat {input.bestk})
+		kcutoff=$(cat {input.bestkcutoff})
+
+		cd results/{params.sample}/assembly/minia/bestk
+		if [ $bestk -eq 0 ]
+		then
+			echo -e "Setting k to {params.defaultk}" 1> {params.wd}/{log.stdout}
+			touch k.set.manually.to.{params.defaultk}
+			bestk={params.defaultk}
+			kcutoff=2
+		fi
+
+		minia \
+		-in {params.wd}/{input.f} \
+		-in {params.wd}/{input.r} \
+		-in {params.wd}/{input.se} \
+		-in {params.wd}/{input.merged} \
+		-kmer-size $bestk -abundance-min $kcutoff -max-memory $(( ( {resources.mem_gb} - 5 ) * 1000 )) -out {params.sample}_k$bestk -nb-cores $(( {threads} - 1 )) 1>> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		
+		ln -s {params.sample}_k$bestk.unitigs.fa {params.sample}_bestk.unitigs.fa
+		ln -s {params.sample}_k$bestk.contigs.fa {params.sample}_bestk.contigs.fa
+		rm *.h5
+		touch minia.done
+		"""
+rule abyss:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz", 
+		bestk = rules.kmergenie.output.bestk,
+		bestkcutoff = rules.kmergenie.output.bestkcutoff
+	output:
+		ok = "results/{sample}/assembly/abyss/bestk/abyss.ok",
+		unitigs = "results/{sample}/assembly/abyss/bestk/{sample}-unitigs.fa",
+		scaffolds = "results/{sample}/assembly/abyss/bestk/{sample}-scaffolds.fa",
+	log:
+		stdout = "results/{sample}/logs/abyss.bestk.stdout.txt",
+		stderr = "results/{sample}/logs/abyss.bestk.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/assembly/abyss/bestk",
+		defaultk = k
+	singularity: "docker://reslp/abyss:2.2.5"
+#	shadow: "minimal"
+	threads: 90
+	resources:
+		mem_gb=750
+	shell:
+		"""
+		export TMPDIR={params.wd}/{params.dir}/tmp
+		echo "Host: $HOSTNAME" 1> {log.stdout} 2> {log.stderr}
+
+		bestk=$(cat {input.bestk})
+		kcutoff=$(cat {input.bestkcutoff})
+
+		cd results/{params.sample}/assembly/abyss/bestk
+		if [ $bestk -eq 0 ]
+		then
+			echo -e "Setting k to {params.defaultk}" 1> {params.wd}/{log.stdout}
+			touch k.set.manually.to.{params.defaultk}
+			bestk={params.defaultk}
+			kcutoff=2
+		fi
+
+		abyss-pe -C {params.wd}/{params.dir} k=$bestk name={params.sample} np=$(( {threads} - 1 )) in='{params.wd}/{input.f} {params.wd}/{input.r}' se='{params.wd}/{input.merged} {params.wd}/{input.se}' default 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		touch {params.wd}/{output.ok}
+		"""
+
+rule spades_bestk:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz",
+		bestk = rules.kmergenie.output.bestk 
+	output:
+		ok = "results/{sample}/assembly/spades/bestk/spades.ok"
+	log:
+		stdout = "results/{sample}/logs/spades.bestk.stdout.txt",
+		stderr = "results/{sample}/logs/spades.bestk.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/assembly/spades/bestk",
+		defaultks = "21,33,55,77",
+		mode = "only-assembler" #could be careful, only-error-correction, only-assembler 
+	singularity:
+		"docker://chrishah/spades:v3.14.0"
+#	shadow: "minimal"
+	threads: 90
+	resources:
+		mem_gb=750
+	shell:
+		"""
+		echo "Host: $HOSTNAME" 1> {log.stdout} 2> {log.stderr}
+		if [ $bestk -eq 0 ]
+		then
+			echo -e "No optimal k found" 1> {log.stdout} 2> {log.stderr}
+			touch {output.ok}
+			exit 0
+		else
+			ks=$(echo -e "{params.defaultks},$(cat {input.bestk})" | tr ',' '\\n' | sort -n | tr '\\n' ',' | sed 's/,$//')
+		fi
+
+		if [ ! -d {params.dir} ]
+		then
+			mkdir -p {params.dir}
+		else
+			rm -f {params.dir}/* 
+		fi
+
+		cd {params.dir}
+
+		spades.py \
+		-o ./{params.sample} \
+		-s {params.wd}/{input.se} \
+		--merged {params.wd}/{input.merged} \
+		-1 {params.wd}/{input.f} \
+		-2 {params.wd}/{input.r} \
+		-k $ks \
+		--checkpoints last \
+		--{params.mode} \
+		-t $(( {threads} - 1 )) \
+		-m $(( {resources.mem_gb} - 5 )) 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+
+		touch spades.ok
+		"""
+rule spades:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz" 
+	output:
+		ok = "results/{sample}/assembly/spades/spades.ok"
+	log:
+		stdout = "results/{sample}/logs/spades.stdout.txt",
+		stderr = "results/{sample}/logs/spades.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/assembly/spades",
+		mode = "only-assembler" #could be careful, only-error-correction, only-assembler 
+	singularity:
+		"docker://chrishah/spades:v3.14.0"
+#	shadow: "minimal"
+	threads: 90
+	resources:
+		mem_gb=750
+	shell:
+		"""
+		echo "Host: $HOSTNAME" 1> {log.stdout} 2> {log.stderr}
+		if [ ! -d {params.dir} ]
+		then
+			mkdir -p {params.dir}
+		else
+			rm -f {params.dir}/* 
+		fi
+
+		cd {params.dir}
+
+		spades.py \
+		-o ./{params.sample} \
+		-s {params.wd}/{input.se} \
+		--merged {params.wd}/{input.merged} \
+		-1 {params.wd}/{input.f} \
+		-2 {params.wd}/{input.r} \
+		--checkpoints last \
+		--{params.mode} \
+		-t $(( {threads} - 1 )) \
+		-m $(( {resources.mem_gb} - 5 )) 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+
+		touch spades.ok
+		"""
+rule platanus:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz" 
+	output:
+		ok = "results/{sample}/assembly/platanus/platanus.ok"
+	log:
+		stdout = "results/{sample}/logs/platanus.stdout.txt",
+		stderr = "results/{sample}/logs/platanus.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/assembly/platanus"
+	singularity:
+		"docker://chrishah/platanus:v1.2.4"
+#	shadow: "minimal"
+	threads: 90
+	resources:
+		mem_gb=750
+	shell:
+		"""
+		echo "Host: $HOSTNAME" 1> {log.stdout} 2> {log.stderr}
+		if [ ! -d {params.dir} ]
+		then
+			mkdir -p {params.dir}
+		else
+			rm -f {params.dir}/* 
+		fi
+		
+		cd results/{params.sample}/assembly/platanus
+		echo -e "\n$(date)\tRunning platanus assemble" 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+		platanus assemble \
+		-o {params.sample} \
+		-f <(zcat {params.wd}/{input.f}) <(zcat {params.wd}/{input.r}) <(zcat {params.wd}/{input.se}) <(zcat {params.wd}/{input.merged}) \
+		-t {threads} \
+		-m {resources.mem_gb} 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+
+		echo -e "\n$(date)\tRunning platanus scaffold" 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+		platanus scaffold \
+		-o {params.sample} \
+		-c {params.sample}_contig.fa \
+		-b {params.sample}_contigBubble.fa \
+		-IP1 <(zcat {params.wd}/{input.f}) <(zcat {params.wd}/{input.r}) \
+		-t {threads} 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+
+		echo -e "\n$(date)\tRunning platanus gap close" 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+		platanus gap_close \
+		-o {params.sample} \
+		-c {params.sample}_scaffold.fa \
+		-f <(zcat {params.wd}/{input.se}) <(zcat {params.wd}/{input.merged}) \
+		-IP1 <(zcat {params.wd}/{input.f}) <(zcat {params.wd}/{input.r}) \
+		-t {threads} 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+
+		touch platanus.ok
+#		if [ ! -d {params.dir} ]
+#		then
+#			mkdir -p {params.dir} && mv {params.sample}.* {params.dir}/
+#		else
+#			rm -f {params.dir}/* && mv {params.sample}.* {params.dir}/
+#		fi
+#		touch {params.dir}/platanus.status.ok
+		"""
+
+rule cdhitest_unitigs:
+	input:
+		unitigs = rules.abyss.output.unitigs,
+	output:
+		nr = "results/{sample}/assembly/abyss/bestk/{sample}-unitigs.nr-{similarity}.fa"
+	log:
+		stdout = "results/{sample}/logs/cdhitest-abyss-unitigs-nr-{similarity}.stdout.txt",
+		stderr = "results/{sample}/logs/cdhitest-abyss-unitigs-nr-{similarity}.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		similarity = "{similarity}",
+	singularity: "docker://chrishah/cdhit:v4.8.1"
+	shadow: "minimal"
+	threads: 16
+	resources:
+		mem_gb=8
+	shell:
+		"""
+		cd-hit-est -i {input.unitigs} -o {output.nr} -c {params.similarity} -T {threads} -M $(( ( {resources.mem_gb} - 1 ) * 1000 )) 1> {log.stdout} 2> {log.stderr}
+		"""
+rule split:
+	input:
+		unitigs = rules.abyss.output.unitigs,
+#		unitigs = rules.cdhitest_unitigs.output.nr,
+		long = get_ont
+	output:
+		ok = "results/{sample}/errorcorrection/ectools/partition.ok",
+	log:
+		stdout = "results/{sample}/logs/long.split.stdout.txt",
+		stderr = "results/{sample}/logs/long.split.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/errorcorrection/ectools",
+		minlength_in = 1000,
+		minlength_out = 900,
+		reads_per_file = 100,
+		files_per_dir = 10
+	singularity: "docker://chrishah/ectools-docker:latest"
+#	shadow: "minimal"
+	threads: 2
+	resources:
+		mem_gb=4
+	shell:
+		"""
+		cd {params.dir}
+		#make sure there are no directories
+		rm -rf $(find ./ -maxdepth 1 -mindepth 1 -type d)
+		#partition (script in container path)
+		partition.py -minlen {params.minlength_in} {params.reads_per_file} {params.files_per_dir} {input.long} 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		#filter unitigs by length
+		cat {params.wd}/{input.unitigs} | perl -ne 'chomp; if ($_ =~ />/){{print "\\n$_\\n"}}else{{print "$_"}}' | grep -v "^$" | perl -ne 'chomp; $h=$_; $s=<>; if (length($s) > {params.minlength_in}){{print "$h\\n$s"}}' > unitigs.min-{params.minlength_in}.fasta
+		#prepare correction script (original in container)
+		cat /usr/src/ectools/correct.sh | \
+		sed 's?/path/to/ectools?/usr/src/ectools?' | \
+		sed "s?UNITIG_FILE=.*?UNITIG_FILE=$(pwd)/unitigs.min-{params.minlength_in}.fasta?" | \
+		sed 's/^source /#source /' | \
+		sed 's/^nucmer /nucmer -t $1 /' | \
+		sed 's/^MIN_READ_LEN=.*/MIN_READ_LEN={params.minlength_out}/' > correct.sh
+		#write checkpoint file
+		touch partition.ok
+		"""
+
+rule ectools_correct:
+	input:
+		rules.split.output.ok
+	output:
+		ok = "results/{sample}/errorcorrection/ectools/ectools.{unit}.ok",
+	log:
+		stdout = "results/{sample}/logs/ectools.{unit}.stdout.txt",
+		stderr = "results/{sample}/logs/ectools.{unit}.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		unit = "{unit}",
+		dir = "results/{sample}/errorcorrection/ectools",
+		nbatches = ec_concurrency,
+	singularity: "docker://chrishah/ectools-docker:latest"
+#	shadow: "minimal"
+	threads: 40
+	resources:
+		mem_gb=20
+	shell:
+		"""
+		cd {params.dir}
+		unit={params.unit}
+		step={params.nbatches}
+		unset TMPDIR
+		for c in $(find ./ -mindepth 1 -maxdepth 1 -type d | sed 's?./??' | sort -n )
+		do
+			#remove leading zeros (double curly bracket is just to escape wildcards)
+			#count=$(echo $c | sed 's/^0*//')
+			count=$(printf %0.f $c)
+			times=$(( count / step ))
+			if [ $(( ( count - times * step ) + 1 )) -eq "$unit" ]
+			then
+				echo -e "$(date)\\tprocessing - $count" 
+				cd $(printf "%04d" $count)
+				for suffix in $(ls -1 p* | cut -d "." -f 1 | sort | uniq | sed 's/^p//')
+				do
+					echo -ne "\\t$(date)\\t$suffix - "
+					if [ ! -f "p$suffix.cor.fa" ]
+					then
+						#make sure to remove any old files
+						if [ $(ls -1 p$suffix* | wc -l) -gt 1 ]; then rm p$suffix.*; fi
+						#create tmpdir
+						if [ -d tmp-$suffix ]; then rm -rf tmp-$suffix; fi
+						mkdir tmp-$suffix
+						export TMPDIR=$(pwd)/tmp-$suffix
+						export SGE_TASK_ID=$(printf %0.f $suffix)
+						bash ../correct.sh $(( {threads} - 1 )) && returncode=$? || returncode=$?
+						if [ $returncode -gt 0 ]
+						then
+							echo -e "$(date)\\tsomething went wrong with p$suffix"
+						else
+							rm $(ls -1 p$suffix* | grep -v "cor.fa")
+							echo -e "$(date)\\tp$suffix.cor.fa done"
+						fi
+						rm -rf tmp-$suffix
+					else
+						echo -e "$(date)\\tp$suffix.cor.fa done previously"
+					fi
+				done
+				cd ..
+			fi
+		done 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		touch {params.wd}/{output.ok}
+		"""
+rule abyss_rescaffold:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz", 
+		bestk = rules.kmergenie.output.bestk,
+		long = get_ont
+	output:
+		ok = "results/{sample}/assembly/abyss/ont-rescaffold/abyss.ok"
+	log:
+		stdout = "results/{sample}/logs/abyss.ont-rescaffold.stdout.txt",
+		stderr = "results/{sample}/logs/abyss.ont-rescaffold.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/assembly/abyss/bestk",
+		defaultk = k
+	singularity: "docker://reslp/abyss:2.2.5"
+#	shadow: "minimal"
+	threads: 90
+	resources:
+		mem_gb=750
+	shell:
+		"""
+		export TMPDIR={params.wd}/{params.dir}/tmp
+		echo "Host: $HOSTNAME" 1> {log.stdout} 2> {log.stderr}
+
+		bestk=$(cat {input.bestk})
+
+		cd {params.dir}
+		if [ $bestk -eq 0 ]
+		then
+			echo -e "Setting k to {params.defaultk}" 1> {params.wd}/{log.stdout}
+			touch k.set.manually.to.{params.defaultk}
+			bestk={params.defaultk}
+		fi
+
+		abyss-pe -C {params.wd}/{params.dir} k=$bestk name={params.sample} np=$(( {threads} - 1 )) in='{params.wd}/{input.f} {params.wd}/{input.r}' se='{params.wd}/{input.merged} {params.wd}/{input.se}' long='longa' longa='{input.long}' 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		cd ../ont-rescaffold
+		ln -s ../bestk/{params.sample}-long-scaffs.fa .
+		touch {params.wd}/{output.ok}
+		"""
+
+rule flappie:
+	input:
+		dir = get_fast5_dir
+	output:
+		fastq = "results/{sample}/raw_reads/ont/{sample}.flappie.{unit}.fastq.gz"
+	log:
+		stdout = "results/{sample}/logs/flappie.{unit}.stdout.txt",
+		stderr = "results/{sample}/logs/flappie.{unit}.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		unit = "{unit}",
+		dir = "results/{sample}/raw_reads/ont/",
+		model = "r941_native",
+		nbatches = flappie_concurrency,
+		minlength=1000
+	singularity: "docker://reslp/flappie:4de542f"
+#	shadow: "minimal"
+	threads: 10
+	resources:
+		mem_gb=8
+	shell:
+		"""
+		cd {params.dir}
+		unit={params.unit}
+		step={params.nbatches}
+		model="r941_native"
+		export OPENBLAS_NUM_THREADS={threads}
+		count=0
+		for f in $(ls -1rt {input.dir} | sed -n "$unit~$step p")
+		do
+			echo -e "\\n$(date) - Processing file $f (temp suffix: $unit-$count)"
+			if [ ! -f $unit-$count.min-{params.minlength}.fastq.gz ]
+			then
+				if [ -d $unit-$count ]; then rm -rf $unit-$count/*; else mkdir $unit-$count; fi
+				echo -e "$(date) - converting fast5"
+				multi_to_single_fast5 -i {input.dir}/$f -t {threads} -s $unit-$count/
+				echo -e "$(date) - basecalling"
+				flappie --model={params.model} $unit-$count/*/ | \
+					perl -ne '$h=$_; $s=<>; $p=<>; $q=<>; if (length($s) > {params.minlength}){{print "$h$s$p$q"}}' | gzip > $unit-$count.min-{params.minlength}.fastq.gz.tmp
+				mv $unit-$count.min-{params.minlength}.fastq.gz.tmp $unit-$count.min-{params.minlength}.fastq.gz
+				rm -rf $unit-$count
+			fi
+			let "count+=1"
+			echo -e "$(date) - Done"
+		done 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+
+		cat $unit-*fastq.gz > $unit.min-{params.minlength}.fastq.gz
+		rm $unit-*fastq.gz
+		ln -s $unit.min-{params.minlength}.fastq.gz {params.wd}/{output.fastq}
+		"""
+
+rule abyss_rescaffold_flappie:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz", 
+		bestk = rules.kmergenie.output.bestk,
+		long = expand(rules.flappie.output.fastq, sample="{sample}", unit=flappie_unit_list)
+	output:
+		ok = "results/{sample}/assembly/abyss/flappie-rescaffold/abyss.ok"
+	log:
+		stdout = "results/{sample}/logs/abyss.flappie-rescaffold.stdout.txt",
+		stderr = "results/{sample}/logs/abyss.flappie-rescaffold.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/assembly/abyss/bestk",
+		defaultk = k
+	singularity: "docker://reslp/abyss:2.2.5"
+#	shadow: "minimal"
+	threads: 90
+	resources:
+		mem_gb=750
+	shell:
+		"""
+		export TMPDIR={params.wd}/{params.dir}/tmp
+		echo "Host: $HOSTNAME" 1> {log.stdout} 2> {log.stderr}
+
+		bestk=$(cat {input.bestk})
+
+		cd {params.dir}
+		if [ $bestk -eq 0 ]
+		then
+			echo -e "Setting k to {params.defaultk}" 1> {params.wd}/{log.stdout}
+			touch k.set.manually.to.{params.defaultk}
+			bestk={params.defaultk}
+		fi
+
+		inlong=$(for f in $(echo "{input.long}"); do echo {params.wd}/$f; done | tr '\\n' ' ')
+		#abyss-pe -C {params.wd}/{params.dir} k=$bestk name={params.sample} np=$(( {threads} - 1 )) in='{params.wd}/{input.f} {params.wd}/{input.r}' se='{params.wd}/{input.merged} {params.wd}/{input.se}' long='longa' longa='$inlong' 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		abyss-pe -C {params.wd}/{params.dir} k=$bestk name={params.sample} np=$(( {threads} - 1 )) in='{params.wd}/{input.f} {params.wd}/{input.r}' se='{params.wd}/{input.merged} {params.wd}/{input.se}' long='$inlong' 1> {params.wd}/{log.stdout} 2> {params.wd}/{log.stderr}
+		cd ../flappie-rescaffold
+		ln -s ../bestk/{params.sample}-long-scaffs.fa .
+		touch {params.wd}/{output.ok}
+		"""
+
+rule spades_flappie:
+	input:
+		merged = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchmerged.fastq.gz",
+		f = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.1.fastq.gz",
+		r = "results/{sample}/readmerging/usearch/{sample}-full/{sample}.usearchnotmerged.2.fastq.gz",
+		se = "results/{sample}/errorcorrection/{sample}-full/{sample}.blesscorrected.se.fastq.gz", 
+		long = expand(rules.flappie.output.fastq, sample="{sample}", unit=flappie_unit_list)
+	output:
+		ok = "results/{sample}/assembly/spades/flappie-long/spades.ok"
+	log:
+		stdout = "results/{sample}/logs/spades.flappie-long.stdout.txt",
+		stderr = "results/{sample}/logs/spades.flappie-long.stderr.txt"
+	params:
+		wd = os.getcwd(),
+		sample = "{sample}",
+		dir = "results/{sample}/assembly/spades/flappie-long",
+		mode = "only-assembler" #could be careful, only-error-correction, only-assembler 
+	singularity:
+		"docker://chrishah/spades:v3.14.0"
+#	shadow: "minimal"
+	threads: 90
+	resources:
+		mem_gb=750
+	shell:
+		"""
+		echo "Host: $HOSTNAME" 1> {log.stdout} 2> {log.stderr}
+		if [ ! -d {params.dir} ]
+		then
+			mkdir -p {params.dir}
+		else
+			rm -f {params.dir}/* 
+		fi
+
+		cd {params.dir}
+
+		spades.py \
+		-o ./{params.sample} \
+		-s {params.wd}/{input.se} \
+		--merged {params.wd}/{input.merged} \
+		-1 {params.wd}/{input.f} \
+		-2 {params.wd}/{input.r} \
+		$(for f in $(echo "{input.long}"); do echo "--nanopore {params.wd}/$f"; done | tr '\\n' ' ') \
+		--checkpoints last \
+		--{params.mode} \
+		-t $(( {threads} - 1 )) \
+		-m $(( {resources.mem_gb} - 5 )) 1>> {params.wd}/{log.stdout} 2>> {params.wd}/{log.stderr}
+
+		touch spades.ok
+		"""
