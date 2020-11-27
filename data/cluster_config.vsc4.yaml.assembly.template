@@ -1,0 +1,70 @@
+__default__:
+   J: aDEF
+   n: 1
+   ntasks: 1
+   ntasks-per-core: 2
+   hint: multithread
+   qos: mem_0096
+   partition: mem_0096
+   mem: "4G"
+   time: "00:10:00"
+   output: $(pwd)/log/%x-%j.stdout.txt
+   error: $(pwd)/log/%x-%j.stderr.txt
+all:
+   J: assALL
+kmergenie:
+   J: KMG
+   time: "24:00:00"
+abyss:
+   J: ABB
+   N: 1
+   qos: mem_0768
+   partition: mem_0768
+   time: "24:00:00"
+abyss_rescaffold:
+   J: ABL
+   N: 1
+   qos: mem_0768
+   partition: mem_0768
+   time: "24:00:00"
+spades:
+   J: SPA
+   N: 1
+   qos: mem_0768
+   partition: mem_0768
+   time: "48:00:00"
+minia:
+   J: MIN
+   time: "05:00:00"
+   mem: "20G"
+platanus:
+   J: PLA
+   N: 1
+   qos: mem_0768
+   partition: mem_0768
+   time: "48:00:00"
+cdhitest_unitigs:
+   J: CDU
+   time: "10:00:00"
+   mem: "8G"
+split:
+   J: SPL
+   time: "01:00:00"
+ectools_correct:
+   J: ECC
+   time: "48:00:00"
+flappie:
+   J: FLA
+   time: "24:00:00"
+abyss_rescaffold_flappie:
+   J: ABF
+   N: 1
+   qos: mem_0768
+   partition: mem_0768
+   time: "24:00:00"
+spades_flappie:
+   J: SPF
+   N: 1
+   qos: mem_0768
+   partition: mem_0768
+   time: "48:00:00"
