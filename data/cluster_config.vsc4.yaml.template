@@ -51,6 +51,7 @@ trim_trimgalore:
 clean_trimmed_libs:
    J: CTL
    time: "00:30:00"
+   mem: "4G"
 kmc:
    J: KMC
    time: "20:00:00"
