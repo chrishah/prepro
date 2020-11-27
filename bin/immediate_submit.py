@@ -45,6 +45,8 @@ if "lib" in job_properties["wildcards"]:
 if "k" in job_properties["wildcards"]:
 	sample = sample+"-k"+job_properties["wildcards"]["k"]
 
+if "unit" in job_properties["wildcards"]:
+	sample = sample+"-"+job_properties["wildcards"]["unit"]
 
 cmdline=[]
 # create list with command line arguments
@@ -58,7 +60,7 @@ if subs == "slurm":
 	
 	#determine threads from the Snakemake profile, i.e. as determined in the Snakefile and the main config file respectively
 	job_properties["cluster"]["ntasks"] = job_properties["threads"]
-	job_properties["cluster"]["ntasks-per-node"] = job_properties["threads"]
+	job_properties["cluster"]["ntasks-per-node"] = job_properties["cluster"]["ntasks"]
 
 	#determine memory requirements from config file/Snakefile
 	if "params" in job_properties:
@@ -66,8 +68,20 @@ if subs == "slurm":
 			job_properties["cluster"]["mem"] = str(job_properties["params"]["max_mem_in_GB"])+"G"
 			print("Setting memory to %s" %job_properties["cluster"]["mem"], file=sys.stderr)
 
+	if "resources" in job_properties:
+		if "mem_gb" in job_properties["resources"]:
+			job_properties["cluster"]["mem"] = str(job_properties["resources"]["mem_gb"])+"G"
+			print("Setting memory to %s" %job_properties["cluster"]["mem"], file=sys.stderr)
+
+	if "n" in job_properties["cluster"] and "N" in job_properties["cluster"]:
+		del job_properties["cluster"]["n"]
+			
 	# create string for slurm submit options for rule
-	slurm_args = "--partition={partition} --time={time} --qos={qos} --ntasks={ntasks} --ntasks-per-node={ntasks-per-node} --hint={hint} --output={output} --error={error} -n {n} -J {J} --mem={mem}".format(**job_properties["cluster"])
+	slurm_args = ""
+	for k in job_properties["cluster"].keys():
+		slurm_args+="--%s=%s " %(k, job_properties["cluster"][k])
+	slurm_args=slurm_args.replace("--N=", "-N ").replace("--J=", "-J ").replace("--n=", "-n ")
+#	slurm_args = "--partition={partition} --time={time} --qos={qos} --ntasks={ntasks} --ntasks-per-node={ntasks-per-node} --ntasks-per-core={ntasks-per-core} --hint={hint} --output={output} --error={error} -n {n} -J {J} --mem={mem}".format(**job_properties["cluster"])
 	cmdline.append(slurm_args)
 	# now work on dependencies
 	if dependencies:
