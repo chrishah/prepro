@@ -105,6 +105,8 @@ rule all_correct:
 		
 rule all_correct_clean:
 	input:
+		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.corrected.fastq.gz", unit=units.itertuples()),
+		expand("results/{unit.sample}/errorcorrection/{unit.lib}/{unit.sample}.{unit.lib}.{pe}.corrected.fastq.gz", unit=units.itertuples(), pe=["1","2"]),
 		#corrected
 		expand("results/{unit.sample}/errorcorrection/{unit.sample}-full/{unit.sample}.cat.status.ok", unit=units.itertuples())
 
@@ -584,8 +586,8 @@ rule clean_trimmed_libs:
 			cat {input.forward} > {output.f_trimmed}
 			cat {input.reverse} > {output.r_trimmed}
 		else
-			ln -s ../../../../{input.forward} {output.f_trimmed}
-			ln -s ../../../../{input.reverse} {output.r_trimmed}
+			ln -s ../../../../../{input.forward} {output.f_trimmed}
+			ln -s ../../../../../{input.reverse} {output.r_trimmed}
 		fi
 		cat {input.forward_orphans} {input.reverse_orphans} > {output.orphans}
 		touch {output.ok}
